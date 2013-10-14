@@ -188,18 +188,51 @@ abstract class Graph[VD: ClassManifest, ED: ClassManifest] {
   //  */
   // def combineEdges(reduce: (ED, ED) => ED): Graph[VD, ED]
 
-
   /**
-   * This function is used to compute a statistic for the neighborhood of each
-   * vertex.
+   * Compute a statistic for the neighborhood of each vertex.
    *
    * This is one of the core functions in the Graph API in that enables
-   * neighborhood level computation.  For example this function can be used to
+   * neighborhood level computation. For example this function can be used to
    * count neighbors satisfying a predicate or implement PageRank.
    *
-   * @note The returned RDD may contain fewer entries than their are vertices
-   * in the graph.  This is because some vertices may not have neighbors or the
-   * map function may return None for all neighbors.
+   * @param mapFunc the function applied to each edge. The mapFunc returns zero
+   * or more results that will contribute to the final sum of the vertex with
+   * the associated ID. Currently, edges can only contribute to their neighbor
+   * vertices.
+   * @param mergeFunc the function used to merge the results of each map
+   * operation that are sent to the same vertex.
+   * @tparam A the returned type of the aggregation operation.
+   *
+   * @return A copy of the input graph where the original data for each vertex
+   * is associated with the result of the aggregation for that vertex, or None
+   * if there was nothing to aggregate.
+   *
+   * @example We can use this function to compute the average follower age for
+   * each user
+   * {{{
+   * val graph: Graph[Int,Int] = loadGraph()
+   * val averageFollowerAge: Graph[Double, Int] =
+   *   graph.aggregateNeighbors[(Int,Double)](
+   *     edge => List((edge.dst.id, (edge.src.data, 1))),
+   *     (a, b) => (a._1 + b._1, a._2 + b._2))
+   *   .mapVertices { v => v.data match {
+   *     case (age, Some((sum, followers))) => sum.toDouble / followers
+   *     case (age, None) => Double.NaN
+   *   }}
+   * }}}
+   *
+   */
+  def aggregateNeighbors[A: ClassManifest](
+      mapFunc: EdgeTriplet[VD, ED] => Iterable[(Vid, A)],
+      mergeFunc: (A, A) => A)
+    : Graph[(VD, Option[A]), ED]
+
+  /**
+   * Compute a statistic for the neighborhood of each vertex.
+   *
+   * This is one of the core functions in the Graph API in that enables
+   * neighborhood level computation. For example this function can be used to
+   * count neighbors satisfying a predicate or implement PageRank.
    *
    * @param mapFunc the function applied to each edge adjacent to each vertex.
    * The mapFunc can optionally return None in which case it does not
@@ -207,23 +240,25 @@ abstract class Graph[VD: ClassManifest, ED: ClassManifest] {
    * @param mergeFunc the function used to merge the results of each map
    * operation.
    * @param direction the direction of edges to consider (e.g., In, Out, Both).
-   * @tparam VD2 The returned type of the aggregation operation.
+   * @tparam A the returned type of the aggregation operation.
    *
-   * @return A Spark.RDD containing tuples of vertex identifiers and thee
-   * resulting value.  Note that the returned RDD may contain fewer vertices
-   * than in the original graph since some vertices may not have neighbors or
-   * the map function could return None for all neighbors.
+   * @return A copy of the input graph where the original data for each vertex
+   * is associated with the result of the aggregation for that vertex, or None
+   * if there was nothing to aggregate.
    *
    * @example We can use this function to compute the average follower age for
    * each user
    * {{{
    * val graph: Graph[Int,Int] = loadGraph()
-   * val averageFollowerAge: RDD[(Int, Int)] =
+   * val averageFollowerAge: Graph[Double, Int] =
    *   graph.aggregateNeighbors[(Int,Double)](
    *     (vid, edge) => (edge.otherVertex(vid).data, 1),
    *     (a, b) => (a._1 + b._1, a._2 + b._2),
    *     EdgeDirection.In)
-   *     .mapValues{ case (sum,followers) => sum.toDouble / followers}
+   *   .mapVertices { v => v.data match {
+   *     case (age, Some((sum, followers))) => sum.toDouble / followers
+   *     case (age, None) => Double.NaN
+   *   }}
    * }}}
    *
    */
@@ -232,56 +267,6 @@ abstract class Graph[VD: ClassManifest, ED: ClassManifest] {
       mergeFunc: (A, A) => A,
       direction: EdgeDirection)
     : Graph[(VD, Option[A]), ED]
-
-  /**
-   * This function is used to compute a statistic for the neighborhood of each
-   * vertex and returns a value for all vertices (including those without
-   * neighbors).
-   *
-   * This is one of the core functions in the Graph API in that enables
-   * neighborhood level computation. For example this function can be used to
-   * count neighbors satisfying a predicate or implement PageRank.
-   *
-   * @note Because the a default value is provided all vertices will have a
-   * corresponding entry in the returned RDD.
-   *
-   * @param mapFunc the function applied to each edge adjacent to each vertex.
-   * The mapFunc can optionally return None in which case it does not
-   * contribute to the final sum.
-   * @param reduceFunc the function used to merge the results of each map
-   * operation.
-   * @param default the default value to use for each vertex if it has no
-   * neighbors or the map function repeatedly evaluates to none
-   * @param direction the direction of edges to consider (e.g., In, Out, Both).
-   * @tparam VD2 The returned type of the aggregation operation.
-   *
-   * @return A Spark.RDD containing tuples of vertex identifiers and
-   * their resulting value.  There will be exactly one entry for ever vertex in
-   * the original graph.
-   *
-   * @example We can use this function to compute the average follower age
-   * for each user
-   * {{{
-   * val graph: Graph[Int,Int] = loadGraph()
-   * val averageFollowerAge: RDD[(Int, Int)] =
-   *   graph.aggregateNeighbors[(Int,Double)](
-   *     (vid, edge) => (edge.otherVertex(vid).data, 1),
-   *     (a, b) => (a._1 + b._1, a._2 + b._2),
-   *     -1,
-   *     EdgeDirection.In)
-   *     .mapValues{ case (sum,followers) => sum.toDouble / followers}
-   * }}}
-   *
-   * @todo Should this return a graph with the new vertex values?
-   *
-   */
-  def aggregateNeighbors[A: ClassManifest](
-      mapFunc: (Vid, EdgeTriplet[VD, ED]) => Option[A],
-      reduceFunc: (A, A) => A,
-      default: A, // Should this be a function or a value?
-      direction: EdgeDirection)
-    : Graph[(VD, Option[A]), ED]
-
 
   /**
    * Join the vertices with an RDD and then apply a function from the the
