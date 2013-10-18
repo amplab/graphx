@@ -154,7 +154,8 @@ private[spark] class BlockManager(
 
   var heartBeatTask: Cancellable = null
 
-  val metadataCleaner = new MetadataCleaner("BlockManager", this.dropOldBlocks)
+  private val metadataCleaner = new MetadataCleaner(MetadataCleanerType.BLOCK_MANAGER, this.dropOldNonBroadcastBlocks)
+  private val broadcastCleaner = new MetadataCleaner(MetadataCleanerType.BROADCAST_VARS, this.dropOldBroadcastBlocks)
   initialize()
 
   // The compression codec to use. Note that the "lazy" val is necessary because we want to delay
@@ -484,7 +485,7 @@ private[spark] class BlockManager(
     for (loc <- locations) {
       logDebug("Getting remote block " + blockId + " from " + loc)
       val data = BlockManagerWorker.syncGetBlock(
-          GetBlock(blockId), ConnectionManagerId(loc.host, loc.port))
+        GetBlock(blockId), ConnectionManagerId(loc.host, loc.port))
       if (data != null) {
         return Some(dataDeserialize(blockId, data))
       }
@@ -495,10 +496,45 @@ private[spark] class BlockManager(
   }
 
   /**
+   * Get block from remote block managers as serialized bytes.
+   */
+   def getRemoteBytes(blockId: String): Option[ByteBuffer] = {
+     // TODO: As with getLocalBytes, this is very similar to getRemote and perhaps should be
+     // refactored.
+     if (blockId == null) {
+       throw new IllegalArgumentException("Block Id is null")
+     }
+     logDebug("Getting remote block " + blockId + " as bytes")
+     
+     val locations = master.getLocations(blockId)
+     for (loc <- locations) {
+       logDebug("Getting remote block " + blockId + " from " + loc)
+       val data = BlockManagerWorker.syncGetBlock(
+         GetBlock(blockId), ConnectionManagerId(loc.host, loc.port))
+       if (data != null) {
+         return Some(data)
+       }
+       logDebug("The value of block " + blockId + " is null")
+     }
+     logDebug("Block " + blockId + " not found")
+     return None
+   }
+
+  /**
    * Get a block from the block manager (either local or remote).
    */
   def get(blockId: String): Option[Iterator[Any]] = {
-    getLocal(blockId).orElse(getRemote(blockId))
+    val local = getLocal(blockId)
+    if (local.isDefined) {
+      logInfo("Found block %s locally".format(blockId))
+      return local
+    }
+    val remote = getRemote(blockId)
+    if (remote.isDefined) {
+      logInfo("Found block %s remotely".format(blockId))
+      return remote
+    }
+    None
   }
 
   /**
@@ -886,13 +922,36 @@ private[spark] class BlockManager(
     }
   }
 
-  def dropOldBlocks(cleanupTime: Long) {
-    logInfo("Dropping blocks older than " + cleanupTime)
+  private def dropOldNonBroadcastBlocks(cleanupTime: Long) {
+    logInfo("Dropping non broadcast blocks older than " + cleanupTime)
     val iterator = blockInfo.internalMap.entrySet().iterator()
     while (iterator.hasNext) {
       val entry = iterator.next()
       val (id, info, time) = (entry.getKey, entry.getValue._1, entry.getValue._2)
-      if (time < cleanupTime) {
+      if (time < cleanupTime && ! BlockManager.isBroadcastBlock(id) ) {
+        info.synchronized {
+          val level = info.level
+          if (level.useMemory) {
+            memoryStore.remove(id)
+          }
+          if (level.useDisk) {
+            diskStore.remove(id)
+          }
+          iterator.remove()
+          logInfo("Dropped block " + id)
+        }
+        reportBlockStatus(id, info)
+      }
+    }
+  }
+
+  private def dropOldBroadcastBlocks(cleanupTime: Long) {
+    logInfo("Dropping broadcast blocks older than " + cleanupTime)
+    val iterator = blockInfo.internalMap.entrySet().iterator()
+    while (iterator.hasNext) {
+      val entry = iterator.next()
+      val (id, info, time) = (entry.getKey, entry.getValue._1, entry.getValue._2)
+      if (time < cleanupTime && BlockManager.isBroadcastBlock(id) ) {
         info.synchronized {
           val level = info.level
           if (level.useMemory) {
@@ -912,7 +971,7 @@ private[spark] class BlockManager(
   def shouldCompress(blockId: String): Boolean = {
     if (ShuffleBlockManager.isShuffle(blockId)) {
       compressShuffle
-    } else if (blockId.startsWith("broadcast_")) {
+    } else if (BlockManager.isBroadcastBlock(blockId)) {
       compressBroadcast
     } else if (blockId.startsWith("rdd_")) {
       compressRdds
@@ -969,6 +1028,7 @@ private[spark] class BlockManager(
     memoryStore.clear()
     diskStore.clear()
     metadataCleaner.cancel()
+    broadcastCleaner.cancel()
     logInfo("BlockManager stopped")
   }
 }
@@ -1042,5 +1102,9 @@ private[spark] object BlockManager extends Logging {
   {
     blockIdsToBlockManagers(blockIds, env, blockManagerMaster).mapValues(s => s.map(_.host))
   }
+
+  def isBroadcastBlock(blockId: String): Boolean = null != blockId && blockId.startsWith("broadcast_")
+
+  def toBroadcastId(id: Long): String = "broadcast_" + id
 }
 
