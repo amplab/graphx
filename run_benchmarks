@@ -4,13 +4,13 @@
 source ~/spark-ec2/ec2-variables.sh
 command=~/graphx/run-example
 class="org.apache.spark.graph.Analytics"
-iter=10
+iter=5
 epart=128
 algo=pagerank
 data="soc-LiveJournal1.txt"
-file=~/timing_noarrays2.txt
+file=~/results/clean.txt
 tc=/usr/bin/time
-numtrials=4
+numtrials=2
 
 
 counter=0
