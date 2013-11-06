@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# Gives us $MASTERS env var
+source ~/spark-ec2/ec2-variables.sh
+command=~/graphx/run-example
+class="org.apache.spark.graph.Analytics"
+iter=10
+epart=128
+algo=pagerank
+data="soc-LiveJournal1.txt"
+file=~/timing_noarrays2.txt
+tc=/usr/bin/time
+numtrials=4
+
+
+counter=0
+while [ $counter -lt $numtrials ]; do
+  # echo "NEW RUN!!!!!" >> $file
+  echo $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart >> $file
+  #{ time %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart ; } 2> $file
+  { $tc -f %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart; } 2>> $file
+  echo "" >> $file
+  counter=$(( $counter + 1 ))
+done
+
+
+
+#time ./run-example org.apache.spark.graph.Analytics spark://$MASTER:7077 pagerank hdfs://$MASTER:9000/soc-LiveJournal1.txt --numIter=2 --numEPart=128
+
+
