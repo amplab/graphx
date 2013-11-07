@@ -281,6 +281,7 @@ object Analytics extends Logging {
          //val pr = Analytics.pagerank(graph, numIter)
           val pr = if(isDynamic) Analytics.deltaPagerank(graph, tol, numIter)
             else  Analytics.pagerank(graph, numIter)
+         logWarning("PageRank completed")
          logWarning("GRAPHX: Total rank: " + pr.vertices.map{ case (id,r) => r }.reduce(_+_) )
          if (!outFname.isEmpty) {
            println("Saving pageranks of pages to " + outFname)

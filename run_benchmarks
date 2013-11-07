@@ -4,24 +4,67 @@
 source ~/spark-ec2/ec2-variables.sh
 command=~/graphx/run-example
 class="org.apache.spark.graph.Analytics"
-iter=5
 epart=128
 algo=pagerank
 data="soc-LiveJournal1.txt"
-file=~/results/clean.txt
+file=~/results/arrays_pagerank.txt
 tc=/usr/bin/time
-numtrials=2
+numtrials=5
 
 
-counter=0
+# # 5 iterations pagerank
+# iter=5
+# counter=0
+# while [ $counter -lt $numtrials ]; do
+#   # echo "NEW RUN!!!!!" >> $file
+#   echo $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart >> $file
+#   #{ time %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart ; } 2> $file
+#   { $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart; } 2>> $file
+#   echo "" >> $file
+#   counter=$(( $counter + 1 ))
+# done
+# 
+# 
+# # 10 iterations pagerank
+# iter=10
+# counter=0
+# while [ $counter -lt $numtrials ]; do
+#   # echo "NEW RUN!!!!!" >> $file
+#   echo $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart >> $file
+#   #{ time %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart ; } 2> $file
+#   { $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart; } 2>> $file
+#   echo "" >> $file
+#   counter=$(( $counter + 1 ))
+# done
+
+
+# 20 iterations pagerank
+iter=20
+counter=2
 while [ $counter -lt $numtrials ]; do
   # echo "NEW RUN!!!!!" >> $file
   echo $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart >> $file
   #{ time %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart ; } 2> $file
-  { $tc -f %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart; } 2>> $file
+  { $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart; } 2>> $file
   echo "" >> $file
   counter=$(( $counter + 1 ))
 done
+
+
+# # 40 iterations pagerank
+# iter=40
+# counter=0
+# while [ $counter -lt $numtrials ]; do
+#   # echo "NEW RUN!!!!!" >> $file
+#   echo $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart >> $file
+#   #{ time %e $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart ; } 2> $file
+#   { $tc -f "TOTAL: %e seconds" $command $class spark://$MASTERS:7077 $algo hdfs://$MASTERS:9000/$data --numIter=$iter --numEPart=$epart; } 2>> $file
+#   echo "" >> $file
+#   counter=$(( $counter + 1 ))
+# done
+
+
+
 
 
 
