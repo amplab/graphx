@@ -1,6 +1,8 @@
 package org.apache.spark.graph
 
 import org.apache.spark.rdd.RDD
+import org.apache.spark.util.ClosureCleaner
+import org.apache.spark.Logging
 import org.apache.spark.storage.StorageLevel
 
 /**
@@ -21,7 +23,7 @@ import org.apache.spark.storage.StorageLevel
  * @tparam VD the vertex attribute type
  * @tparam ED the edge attribute type
  */
-abstract class Graph[VD: ClassManifest, ED: ClassManifest] {
+abstract class Graph[VD: ClassManifest, ED: ClassManifest] extends Logging {
 
   /**
    * Get the vertices and their data.
