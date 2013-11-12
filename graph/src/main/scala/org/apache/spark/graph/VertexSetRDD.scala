@@ -275,36 +275,36 @@ class VertexSetRDD[@specialized V: ClassManifest](
   }
 
 
-  /**
-   * Inner join this VertexSet with another VertexSet which has the
-   * same Index.  This function will fail if both VertexSets do not
-   * share the same index.
-   *
-   * @param other the vertex set to join with this vertex set
-   * @param f the function mapping a vertex id and its attributes in
-   * this and the other vertex set to a collection of tuples.
-   * @tparam W the type of the other vertex set attributes
-   * @tparam Z the type of the tuples emitted by `f`
-   * @return an RDD containing the tuples emitted by `f`
-   */
-  def zipJoinFlatMap[W: ClassManifest, Z: ClassManifest](other: VertexSetRDD[W])(f: (Vid, V,W) => Iterator[Z]):
-  RDD[Z] = {
-    val cleanF = index.rdd.context.clean(f)
-    if(index != other.index) {
-      throw new SparkException("A zipJoin can only be applied to RDDs with the same index!")
-    }
-    index.rdd.zipPartitions(valuesRDD, other.valuesRDD) { (indexIter, thisIter, otherIter) =>
-      val index = indexIter.next()
-      assert(!indexIter.hasNext)
-      val (thisValues, thisBS: BitSet) = thisIter.next()
-      assert(!thisIter.hasNext)
-      val (otherValues, otherBS: BitSet) = otherIter.next()
-      assert(!otherIter.hasNext)
-      val newBS: BitSet = thisBS & otherBS
-      val newValues = new Array[Z](index.capacity)
-      newBS.iterator.flatMap { ind => cleanF(index.getValueSafe(ind), thisValues(ind), otherValues(ind)) }
-    }
-  }
+//  /**
+//   * Inner join this VertexSet with another VertexSet which has the
+//   * same Index.  This function will fail if both VertexSets do not
+//   * share the same index.
+//   *
+//   * @param other the vertex set to join with this vertex set
+//   * @param f the function mapping a vertex id and its attributes in
+//   * this and the other vertex set to a collection of tuples.
+//   * @tparam W the type of the other vertex set attributes
+//   * @tparam Z the type of the tuples emitted by `f`
+//   * @return an RDD containing the tuples emitted by `f`
+//   */
+//  def zipJoinFlatMap[W: ClassManifest, Z: ClassManifest](other: VertexSetRDD[W])(f: (Vid, V,W) => Iterator[Z]):
+//  RDD[Z] = {
+//    val cleanF = index.rdd.context.clean(f)
+//    if(index != other.index) {
+//      throw new SparkException("A zipJoin can only be applied to RDDs with the same index!")
+//    }
+//    index.rdd.zipPartitions(valuesRDD, other.valuesRDD) { (indexIter, thisIter, otherIter) =>
+//      val index = indexIter.next()
+//      assert(!indexIter.hasNext)
+//      val (thisValues, thisBS: BitSet) = thisIter.next()
+//      assert(!thisIter.hasNext)
+//      val (otherValues, otherBS: BitSet) = otherIter.next()
+//      assert(!otherIter.hasNext)
+//      val newBS: BitSet = thisBS & otherBS
+//      val newValues = new Array[Z](index.capacity)
+//      newBS.iterator.flatMap { ind => cleanF(index.getValueSafe(ind), thisValues(ind), otherValues(ind)) }
+//    }
+//  }
 
 
   /**
@@ -594,35 +594,35 @@ object VertexSetRDD {
     new VertexSetRDD(index, values)
   } // end of apply
 
-  /**
-   * Construct an index of the unique vertices.  The resulting index
-   * can be used to build VertexSets over subsets of the vertices in
-   * the input.
-   */
-  def makeIndex(keys: RDD[Vid],
-    partitioner: Option[Partitioner] = None): VertexSetIndex = {
-    // @todo: I don't need the boolean its only there to be the second type since I want to shuffle a single RDD
-    // Ugly hack :-(.  In order to partition the keys they must have values.
-    val tbl = keys.mapPartitions(_.map(k => (k, false)), true)
-    // Shuffle the table (if necessary)
-    val shuffledTbl = partitioner match {
-      case None =>  {
-        if (tbl.partitioner.isEmpty) {
-          // @todo: I don't need the boolean its only there to be the second type of the shuffle.
-          new ShuffledRDD[Vid, Boolean, (Vid, Boolean)](tbl, Partitioner.defaultPartitioner(tbl))
-        } else { tbl }
-      }
-      case Some(partitioner) =>
-        tbl.partitionBy(partitioner)
-    }
-
-    val index = shuffledTbl.mapPartitions( iter => {
-      val index = new VertexIdToIndexMap
-      for ( (k,_) <- iter ){ index.add(k) }
-      Iterator(index)
-      }, true).cache
-    new VertexSetIndex(index)
-  }
+//  /**
+//   * Construct an index of the unique vertices.  The resulting index
+//   * can be used to build VertexSets over subsets of the vertices in
+//   * the input.
+//   */
+//  def makeIndex(keys: RDD[Vid],
+//    partitioner: Option[Partitioner] = None): VertexSetIndex = {
+//    // @todo: I don't need the boolean its only there to be the second type since I want to shuffle a single RDD
+//    // Ugly hack :-(.  In order to partition the keys they must have values.
+//    val tbl = keys.mapPartitions(_.map(k => (k, false)), true)
+//    // Shuffle the table (if necessary)
+//    val shuffledTbl = partitioner match {
+//      case None =>  {
+//        if (tbl.partitioner.isEmpty) {
+//          // @todo: I don't need the boolean its only there to be the second type of the shuffle.
+//          new ShuffledRDD[Vid, Boolean, (Vid, Boolean)](tbl, Partitioner.defaultPartitioner(tbl))
+//        } else { tbl }
+//      }
+//      case Some(partitioner) =>
+//        tbl.partitionBy(partitioner)
+//    }
+//
+//    val index = shuffledTbl.mapPartitions( iter => {
+//      val index = new VertexIdToIndexMap
+//      for ( (k,_) <- iter ){ index.add(k) }
+//      Iterator(index)
+//      }, true).cache
+//    new VertexSetIndex(index)
+//  }
 
 } // end of object VertexSetRDD
 
