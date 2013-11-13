@@ -33,6 +33,7 @@ import org.apache.spark.graph.impl.MsgRDDFunctions._
  *
  */
 class VertexSetIndex(private[spark] val rdd: RDD[VertexIdToIndexMap]) {
+  rdd.cache
   /**
    * The persist function behaves like the standard RDD persist
    */

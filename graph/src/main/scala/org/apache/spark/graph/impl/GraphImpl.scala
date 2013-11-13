@@ -320,19 +320,30 @@ object GraphImpl {
     edges: RDD[Edge[ED]],
     defaultVertexAttr: VD,
     mergeFunc: (VD, VD) => VD): GraphImpl[VD,ED] = {
-
-    vertices.cache
-    edges.cache
-    // Get the set of all vids
-    val allVids = vertices.map(_._1).union(edges.flatMap(e => Seq(e.srcId, e.dstId)))
-    // Index the set of all vids
-    val index = VertexSetRDD.makeIndex(allVids, Some(Partitioner.defaultPartitioner(vertices)))
-    // Index the vertices and fill in missing attributes with the default
-    val vtable = VertexSetRDD(vertices, index, mergeFunc).fillMissing(defaultVertexAttr)
-
-    val etable = createETable(edges)
-    val vid2pid = new Vid2Pid(etable, vtable.index)
+    // [Shuffle] Create the edge table
+    val etable = createETable(edges).cache
+    // Create the localVidMap associated with each edge table
     val localVidMap = createLocalVidMap(etable)
+    // [Shuffle] Determine the unique set of vertices mentioned on all edges
+    val partitioner = Partitioner.defaultPartitioner(vertices)
+    val vid2PidPartial = localVidMap.mapPartitionsWithIndex { (pid, iter) =>
+      val vidmap = iter.next()
+      assert(!iter.hasNext)
+      vidmap.iterator.map(vid => (vid, pid))
+    }.partitionBy(partitioner).cache
+
+    val vtableShuffled = vertices.partitionBy(partitioner).cache
+
+    val index = VertexSetIndex(vtableShuffled.zipPartitions(vid2pidPartial) {
+      // Build OpenHashSet
+
+    }.cache)
+
+    // Index the vertices and fill in missing attributes with the default
+    val vtable = VertexSetRDD(vtableShffled, index, mergeFunc).fillMissing(defaultVertexAttr)
+
+    val vid2pid = //do something
+
     new GraphImpl(vtable, vid2pid, localVidMap, etable)
   }
 
