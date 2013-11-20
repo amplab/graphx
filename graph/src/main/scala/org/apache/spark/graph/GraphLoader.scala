@@ -1,12 +1,49 @@
 package org.apache.spark.graph
 
-import org.apache.spark.rdd.RDD
+import java.util.{Arrays => JArrays}
+
+import org.apache.spark.Logging
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
-import org.apache.spark.graph.impl.GraphImpl
+import org.apache.spark.graph.impl.{EdgePartition, GraphImpl}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.util.collection.PrimitiveVector
 
 
-object GraphLoader {
+object GraphLoader extends Logging {
+
+  def textFile(sc: SparkContext, path: String, minEdgePartitions: Int): GraphImpl[Int, Double] = {
+    val startTime = System.currentTimeMillis
+
+    // Parse the edge data table
+    val edges = sc.textFile(path, minEdgePartitions).mapPartitionsWithIndex { (index, iter) =>
+      val srcIds = new PrimitiveVector[Long]
+      val dstIds = new PrimitiveVector[Long]
+      iter.foreach { line =>
+        if (!line.isEmpty && line(0) != '#') {
+          val lineArray = line.split("\\s+")
+          if (lineArray.length < 2) {
+            logWarning("Invalid line: " + line)
+          }
+          srcIds += lineArray(0).toLong
+          dstIds += lineArray(1).toLong
+        }
+      }
+      val srcIdArray = srcIds.trim().array
+      val dstIdArray = dstIds.trim().array
+      val data = new Array[Double](srcIdArray.length)
+      JArrays.fill(data, 1.0F)
+
+      Iterator((index, new EdgePartition[Double](srcIdArray, dstIdArray, data)))
+    }.cache()
+    edges.count()
+
+    println("It took %d ms to load the edges".format(System.currentTimeMillis - startTime))
+
+    //val graph = fromEdges(edges)
+    //graph
+    null
+  }
 
   /**
    * Load an edge list from file initializing the Graph
@@ -30,11 +67,15 @@ object GraphLoader {
       minVertexPartitions: Int = 1,
       partitionStrategy: PartitionStrategy = RandomVertexCut()): GraphImpl[Int, ED] = {
 
+    return textFile(sc, path, minEdgePartitions).asInstanceOf[GraphImpl[Int, ED]]
+
+    val startTime = System.currentTimeMillis
+
     // Parse the edge data table
     val edges = sc.textFile(path, minEdgePartitions).flatMap { line =>
       if (!line.isEmpty && line(0) != '#') {
         val lineArray = line.split("\\s+")
-        if(lineArray.length < 2) {
+        if (lineArray.length < 2) {
           println("Invalid line: " + line)
           assert(false)
         }
@@ -47,6 +88,9 @@ object GraphLoader {
         Array.empty[Edge[ED]]
       }
     }.cache()
+    edges.count()
+
+    println("It took %d ms to load the edges".format(System.currentTimeMillis - startTime))
 
     val graph = fromEdges(edges, partitionStrategy)
     graph
