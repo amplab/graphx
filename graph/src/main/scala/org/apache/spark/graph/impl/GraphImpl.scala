@@ -193,9 +193,9 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
       epred: EdgeTriplet[VD, ED] => Boolean = (x => true),
       vpred: (Vid, VD) => Boolean = ((a,b) => true)): Graph[VD, ED] = {
 
-    // Filter the vertices, reusing the partitioner (but not the index) from
+    // Filter the vertices, reusing the partitioner and index from
     // this graph
-    val newVTable = vTable.mapVertexPartitions(_.filter(vpred).reindex())
+    val newVTable = vTable.mapVertexPartitions(_.filter(vpred))
 
     // Restrict the set of edges to those that satisfy the vertex and the edge predicate.
     val newETable = createETable(
