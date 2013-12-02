@@ -11,9 +11,8 @@ import org.apache.spark.util.collection.PrimitiveKeyOpenHashMap
  */
 private[impl]
 class EdgeTripletIterator[VD: ClassManifest, ED: ClassManifest](
-    val vidToIndex: VertexIdToIndexMap,
-    val vertexArray: Array[VD],
-    val edgePartition: EdgePartition[ED])
+    val edgePartition: EdgePartition[ED],
+    val vmap: PrimitiveKeyOpenHashMap[Vid, VD])
   extends Iterator[EdgeTriplet[VD, ED]] {
 
   // Current position in the array.
@@ -22,8 +21,6 @@ class EdgeTripletIterator[VD: ClassManifest, ED: ClassManifest](
   // A triplet object that this iterator.next() call returns. We reuse this object to avoid
   // allocating too many temporary Java objects.
   private val triplet = new EdgeTriplet[VD, ED]
-
-  private val vmap = new PrimitiveKeyOpenHashMap[Vid, VD](vidToIndex, vertexArray)
 
   override def hasNext: Boolean = pos < edgePartition.size
 
