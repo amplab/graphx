@@ -40,10 +40,11 @@ class ReplicatedVertices[VD: ClassManifest](
       (edges: EdgeRDD[ED], includeSrc: Boolean, includeDst: Boolean)
       (f: (Pid, EdgePartition[ED], PrimitiveKeyOpenHashMap[Vid, VD]) => Iterator[U]): RDD[U] = {
     val cleanF = vertices.context.clean(f)
+    val vdManifest = classManifest[VD]
     edges.zipEdgePartitions(get(includeSrc, includeDst)) { (edgePartition, vIter) =>
       val (pid, (vidToIndex, vertexArray)) = vIter.next()
       assert(vidToIndex.capacity == vertexArray.size)
-      val vmap = new PrimitiveKeyOpenHashMap(vidToIndex, vertexArray)
+      val vmap = new PrimitiveKeyOpenHashMap(vidToIndex, vertexArray)(classManifest[Long], vdManifest)
       cleanF(pid, edgePartition, vmap)
     }
   }
