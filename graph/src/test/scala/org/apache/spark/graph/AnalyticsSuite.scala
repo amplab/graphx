@@ -87,8 +87,8 @@ class AnalyticsSuite extends FunSuite with LocalSparkContext {
 
   test("Grid PageRank") {
     withSpark(new SparkContext("local", "test")) { sc =>
-      val rows = 10
-      val cols = 10
+      val rows = 4
+      val cols = 4
       val resetProb = 0.15
       val tol = 0.0001
       val numIter = 50

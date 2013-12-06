@@ -1,9 +1,10 @@
 package org.apache.spark.graph.algorithms
 
+import org.apache.spark.Logging
 import org.apache.spark.graph._
 
 
-object PageRank {
+object PageRank extends Logging {
 
   /**
    * Run PageRank for a fixed number of iterations returning a graph
@@ -60,7 +61,7 @@ object PageRank {
       .mapVertices( (id, attr) => 1.0 )
 
     // Display statistics about pagerank
-    println(pagerankGraph.statistics)
+    logInfo(pagerankGraph.statistics.toString)
 
     // Define the three functions needed to implement PageRank in the GraphX
     // version of Pregel
@@ -124,7 +125,7 @@ object PageRank {
       .mapVertices( (id, attr) => (0.0, 0.0) )
 
     // Display statistics about pagerank
-    println(pagerankGraph.statistics)
+    logInfo(pagerankGraph.statistics.toString)
 
     // Define the three functions needed to implement PageRank in the GraphX
     // version of Pregel
@@ -156,29 +157,49 @@ object PageRank {
       graph: Graph[VD, ED], tol: Double, resetProb: Double = 0.15): VertexRDD[Double] = {
 
     // Initialize the ranks
-    var ranks: VertexRDD[Double] = graph.vertices.mapValues((vid, attr) => 1.0)
+    var ranks: VertexRDD[Double] = graph.vertices.mapValues((vid, attr) => 0.0).cache()
+
+    println("[pre] ranks:"); ranks.foreach { case (vid, rank) => println("(%d, %f)".format(vid, rank)) }
 
     // Initialize the delta graph where each vertex stores its delta and each edge knows its weight
-    val degrees: Graph[Int, ED] = graph.outerJoinVertices(graph.outDegrees) {
-      (vid, vdata, deg) => deg.getOrElse(0)
-    }
-    val weights: Graph[Int, Double] = degrees.mapTriplets(e => 1.0 / e.srcAttr)
-    var deltaGraph: Graph[Double, Double] = weights.mapVertices((vid, degree) => 0.0)
+    var deltaGraph: Graph[Double, Double] =
+      graph.outerJoinVertices(graph.outDegrees)((vid, vdata, deg) => deg.getOrElse(0))
+      .mapTriplets(e => 1.0 / e.srcAttr)
+      .mapVertices((vid, degree) => 0.0).cache()
     var numDeltas: Long = ranks.count()
 
+    println("[pre] deltaGraph:"); deltaGraph.vertices.foreach { case (vid, delta) => println("(%d, %f)".format(vid, delta)) }
+
+    var i = 0
     while (numDeltas > 0) {
-      // Recompute deltas
-      val deltas = deltaGraph.mapReduceTriplets[Double](
-        et => if (et.srcAttr > tol) Iterator((et.dstId, et.srcAttr * et.attr)) else Iterator.empty,
-        _ + _)
-      val filteredDeltas = deltas.filter { case (vid, delta) => delta != 0 }
+      // Compute new deltas
+      val deltas = deltaGraph
+        .outerJoinVertices(ranks)((vid, _, rank) => rank.get)
+        .mapReduceTriplets[Double](
+          et => Iterator((et.dstId, et.srcAttr * et.attr)),
+          _ + _)
+        .cache()
+      val numDeltasPreFilter = deltas.count()
+      val filteredDeltas = deltas.filter { case (vid, delta) => delta > tol }.cache()
       numDeltas = filteredDeltas.count()
-      deltaGraph = deltaGraph.deltaJoinVertices(filteredDeltas)
+      println("Standalone PageRank: iter %d has %d deltas (%d pre-filter)".format(
+        i, numDeltas, numDeltasPreFilter))
+
+      println("[iter %d] filteredDeltas:".format(i)); filteredDeltas.foreach { case (vid, delta) => println("(%d, %f)".format(vid, delta)) }
+
+      // Apply deltas
+      deltaGraph = deltaGraph.deltaJoinVertices(filteredDeltas).cache()
+
+      println("[iter %d] deltaGraph:".format(i)); deltaGraph.vertices.foreach { case (vid, delta) => println("(%d, %f)".format(vid, delta)) }
 
       // Update ranks
       ranks = ranks.leftZipJoin(deltaGraph.vertices) { (vid, oldRank, deltaOpt) =>
         oldRank + (1.0 - resetProb) * deltaOpt.getOrElse(0.0)
       }
+
+      println("[iter %d] ranks:".format(i)); ranks.foreach { case (vid, rank) => println("(%d, %f)".format(vid, rank)) }
+
+      i += 1
     }
 
     ranks
