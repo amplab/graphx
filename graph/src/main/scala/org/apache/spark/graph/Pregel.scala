@@ -105,7 +105,7 @@ object Pregel {
       // receive the messages
       val changedVerts = g.vertices.deltaJoin(messages)(vprog).cache() // updating the vertices
       // replicate the changed vertices
-      g = graph.deltaJoinVertices(changedVerts)
+      g = g.deltaJoinVertices(changedVerts)
       // count the iteration
       i += 1
     }
@@ -184,7 +184,7 @@ object Pregel {
       // receive the messages
       val changedVerts = g.vertices.deltaJoin(messages)(vprog).cache() // updating the vertices
       // replicate the changed vertices
-      g = graph.deltaJoinVertices(changedVerts)
+      g = g.deltaJoinVertices(changedVerts)
 
       val oldMessages = messages
       // compute the messages
