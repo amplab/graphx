@@ -151,4 +151,32 @@ object PageRank {
     Pregel(pagerankGraph, initialMessage)(vertexProgram, sendMessage, messageCombiner)
       .mapVertices((vid, attr) => attr._1)
   } // end of deltaPageRank
+
+  def runWithGraphX[VD: Manifest, ED: Manifest](
+      graph: Graph[VD, ED], numIter: Int, resetProb: Double = 0.15): VertexRDD[Double] = {
+
+    // Initialize the ranks
+    var ranks: VertexRDD[Double] = graph.vertices.mapValues((vid, attr) => 1.0)
+
+    // Initialize the delta graph where each vertex stores its delta and each edge knows its weight
+    val degrees: Graph[Int, ED] = graph.outerJoinVertices(graph.outDegrees) {
+      (vid, vdata, deg) => deg.getOrElse(0)
+    }
+    val weights: Graph[Int, Double] = degrees.mapTriplets(e => 1.0 / e.srcAttr)
+    var deltaGraph: Graph[Double, Double] = weights.mapVertices((vid, degree) => 0.0)
+
+    // Recompute deltas
+    val deltas = deltaGraph.mapReduceTriplets[Double](
+      et => Iterator((et.dstId, et.srcAttr * et.attr)),
+      _ + _).filter { case (vid, delta) => delta != 0 }
+    deltaGraph = deltaGraph.deltaJoinVertices(deltas)
+
+    // Update ranks
+    ranks = ranks.leftZipJoin(deltaGraph.vertices) { (vid, oldRank, deltaOpt) =>
+      oldRank + deltaOpt.getOrElse(0.0)
+    }
+
+    ranks
+  }
+
 }
