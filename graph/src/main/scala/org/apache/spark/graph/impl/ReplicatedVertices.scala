@@ -2,7 +2,7 @@ package org.apache.spark.graph.impl
 
 import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
-import org.apache.spark.util.collection.OpenHashSet
+import org.apache.spark.util.collection.{OpenHashSet, PrimitiveKeyOpenHashMap}
 
 import org.apache.spark.graph._
 
@@ -10,22 +10,22 @@ import org.apache.spark.graph._
  * Stores the vertex attribute values after they are replicated.
  */
 private[impl]
-class VTableReplicated[VD: ClassManifest](
-    vTable: VertexRDD[VD],
-    eTable: EdgeRDD[_],
+class ReplicatedVertices[VD: ClassManifest](
+    vertices: VertexRDD[VD],
+    edges: EdgeRDD[_],
     vertexPlacement: VertexPlacement) {
 
   val bothAttrs: RDD[(Pid, (VertexIdToIndexMap, Array[VD]))] =
-    createVTableReplicated(vTable, eTable, vertexPlacement, true, true)
+    create(vertices, edges, vertexPlacement, true, true)
 
   val srcAttrOnly: RDD[(Pid, (VertexIdToIndexMap, Array[VD]))] =
-    createVTableReplicated(vTable, eTable, vertexPlacement, true, false)
+    create(vertices, edges, vertexPlacement, true, false)
 
   val dstAttrOnly: RDD[(Pid, (VertexIdToIndexMap, Array[VD]))] =
-    createVTableReplicated(vTable, eTable, vertexPlacement, false, true)
+    create(vertices, edges, vertexPlacement, false, true)
 
   val noAttrs: RDD[(Pid, (VertexIdToIndexMap, Array[VD]))] =
-    createVTableReplicated(vTable, eTable, vertexPlacement, false, false)
+    create(vertices, edges, vertexPlacement, false, false)
 
   def get(includeSrc: Boolean, includeDst: Boolean): RDD[(Pid, (VertexIdToIndexMap, Array[VD]))] = {
     (includeSrc, includeDst) match {
@@ -36,9 +36,22 @@ class VTableReplicated[VD: ClassManifest](
     }
   }
 
-  private def createVTableReplicated[VD: ClassManifest](
-       vTable: VertexRDD[VD],
-       eTable: EdgeRDD[_],
+  def zipWithEdges[ED, U: ClassManifest]
+      (edges: EdgeRDD[ED], includeSrc: Boolean, includeDst: Boolean)
+      (f: (Pid, EdgePartition[ED], PrimitiveKeyOpenHashMap[Vid, VD]) => Iterator[U]): RDD[U] = {
+    val cleanF = vertices.context.clean(f)
+    val vdManifest = classManifest[VD]
+    edges.zipEdgePartitions(get(includeSrc, includeDst)) { (edgePartition, vIter) =>
+      val (pid, (vidToIndex, vertexArray)) = vIter.next()
+      assert(vidToIndex.capacity == vertexArray.size)
+      val vmap = new PrimitiveKeyOpenHashMap(vidToIndex, vertexArray)(classManifest[Long], vdManifest)
+      cleanF(pid, edgePartition, vmap)
+    }
+  }
+
+  private def create[VD: ClassManifest](
+       vertices: VertexRDD[VD],
+       edges: EdgeRDD[_],
        vertexPlacement: VertexPlacement,
        includeSrcAttr: Boolean,
        includeDstAttr: Boolean): RDD[(Pid, (VertexIdToIndexMap, Array[VD]))] = {
@@ -47,7 +60,7 @@ class VTableReplicated[VD: ClassManifest](
 
     // Send each edge partition the vertex attributes it wants, as specified in
     // vertexPlacement
-    val msgsByPartition = placement.zipPartitions(vTable.partitionsRDD) {
+    val msgsByPartition = placement.zipPartitions(vertices.partitionsRDD) {
       (pid2vidIter, vertexPartIter) =>
         val pid2vid: Array[Array[Vid]] = pid2vidIter.next()
         val vertexPart: VertexPartition[VD] = vertexPartIter.next()
@@ -58,7 +71,7 @@ class VTableReplicated[VD: ClassManifest](
           output(pid) = (pid, block)
         }
         output.iterator
-    }.partitionBy(eTable.partitioner.get).cache()
+    }.partitionBy(edges.partitioner.get).cache()
     // TODO: Consider using a specialized shuffler.
 
     // Within each edge partition, create a local map from vid to an index into
@@ -66,7 +79,7 @@ class VTableReplicated[VD: ClassManifest](
     // will receive, because it stores vids from both the source and destination
     // of edges. It must always include both source and destination vids because
     // some operations, such as GraphImpl.mapReduceTriplets, rely on this.
-    val localVidMap = eTable.partitionsRDD.mapPartitions(_.map {
+    val localVidMap = edges.partitionsRDD.mapPartitions(_.map {
       case (pid, epart) =>
         val vidToIndex = new VertexIdToIndexMap
         epart.foreach { e =>
