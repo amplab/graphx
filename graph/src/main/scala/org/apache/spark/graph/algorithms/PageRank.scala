@@ -157,7 +157,7 @@ object PageRank extends Logging {
       graph: Graph[VD, ED], tol: Double, resetProb: Double = 0.15): VertexRDD[Double] = {
 
     // Initialize the ranks
-    var ranks: VertexRDD[Double] = graph.vertices.mapValues((vid, attr) => 0.0).cache()
+    var ranks: VertexRDD[Double] = graph.vertices.mapValues((vid, attr) => resetProb).cache()
 
     println("[pre] ranks:"); ranks.foreach { case (vid, rank) => println("(%d, %f)".format(vid, rank)) }
 
