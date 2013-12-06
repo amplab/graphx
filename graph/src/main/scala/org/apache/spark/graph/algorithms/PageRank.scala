@@ -152,8 +152,8 @@ object PageRank {
       .mapVertices((vid, attr) => attr._1)
   } // end of deltaPageRank
 
-  def runWithGraphX[VD: Manifest, ED: Manifest](
-      graph: Graph[VD, ED], numIter: Int, resetProb: Double = 0.15): VertexRDD[Double] = {
+  def runStandalone[VD: Manifest, ED: Manifest](
+      graph: Graph[VD, ED], tol: Double, resetProb: Double = 0.15): VertexRDD[Double] = {
 
     // Initialize the ranks
     var ranks: VertexRDD[Double] = graph.vertices.mapValues((vid, attr) => 1.0)
@@ -164,16 +164,21 @@ object PageRank {
     }
     val weights: Graph[Int, Double] = degrees.mapTriplets(e => 1.0 / e.srcAttr)
     var deltaGraph: Graph[Double, Double] = weights.mapVertices((vid, degree) => 0.0)
+    var numDeltas: Long = ranks.count()
 
-    // Recompute deltas
-    val deltas = deltaGraph.mapReduceTriplets[Double](
-      et => Iterator((et.dstId, et.srcAttr * et.attr)),
-      _ + _).filter { case (vid, delta) => delta != 0 }
-    deltaGraph = deltaGraph.deltaJoinVertices(deltas)
+    while (numDeltas > 0) {
+      // Recompute deltas
+      val deltas = deltaGraph.mapReduceTriplets[Double](
+        et => if (et.srcAttr > tol) Iterator((et.dstId, et.srcAttr * et.attr)) else Iterator.empty,
+        _ + _)
+      val filteredDeltas = deltas.filter { case (vid, delta) => delta != 0 }
+      numDeltas = filteredDeltas.count()
+      deltaGraph = deltaGraph.deltaJoinVertices(filteredDeltas)
 
-    // Update ranks
-    ranks = ranks.leftZipJoin(deltaGraph.vertices) { (vid, oldRank, deltaOpt) =>
-      oldRank + deltaOpt.getOrElse(0.0)
+      // Update ranks
+      ranks = ranks.leftZipJoin(deltaGraph.vertices) { (vid, oldRank, deltaOpt) =>
+        oldRank + (1.0 - resetProb) * deltaOpt.getOrElse(0.0)
+      }
     }
 
     ranks

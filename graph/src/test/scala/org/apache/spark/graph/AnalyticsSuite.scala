@@ -87,23 +87,33 @@ class AnalyticsSuite extends FunSuite with LocalSparkContext {
 
   test("Grid PageRank") {
     withSpark(new SparkContext("local", "test")) { sc =>
-      val gridGraph = GraphGenerators.gridGraph(sc, 10, 10).cache()
+      val rows = 10
+      val cols = 10
       val resetProb = 0.15
-      val prGraph1 = PageRank.run(gridGraph, 50, resetProb).cache()
-      val prGraph2 = PageRank.runUntillConvergence(gridGraph, 0.0001, resetProb).cache()
-      val error = prGraph1.vertices.zipJoin(prGraph2.vertices) { case (id, a, b) => (a - b) * (a - b) }
+      val tol = 0.0001
+      val numIter = 50
+
+      val gridGraph = GraphGenerators.gridGraph(sc, rows, cols).cache()
+      val staticRanks = PageRank.run(gridGraph, numIter, resetProb).vertices.cache()
+      val dynamicRanks = PageRank.runUntillConvergence(gridGraph, tol, resetProb).vertices.cache()
+      val standaloneRanks = PageRank.runStandalone(gridGraph, tol, resetProb).cache()
+      val error1 = staticRanks.zipJoin(dynamicRanks) { case (id, a, b) => (a - b) * (a - b) }
         .map { case (id, error) => error }.sum
-      //prGraph1.vertices.zipJoin(prGraph2.vertices) { (id, a, b) => (a, b, a-b) }.foreach(println(_))
-      println(error)
-      assert(error < 1.0e-5)
-      val pr3: RDD[(Vid, Double)] = sc.parallelize(GridPageRank(10,10, 50, resetProb))
-      val error2 = prGraph1.vertices.leftJoin(pr3) { (id, a, bOpt) =>
+      val error2 = dynamicRanks.zipJoin(standaloneRanks) { case (id, a, b) => (a - b) * (a - b) }
+        .map { case (id, error) => error }.sum
+      println("Error between static and dynamic: %f".format(error1))
+      println("Error between dynamic and standalone: %f".format(error2))
+      staticRanks.leftJoin(standaloneRanks) { (id, a, b) => (a, b) }.foreach( println(_) )
+      assert(error1 < 1.0e-5)
+      assert(error2 < 1.0e-5)
+
+      val referenceRanks = sc.parallelize(GridPageRank(rows, cols, numIter, resetProb))
+      val error3 = staticRanks.leftJoin(referenceRanks) { (id, a, bOpt) =>
         val b: Double  = bOpt.get
         (a - b) * (a - b)
       }.map { case (id, error) => error }.sum
-      //prGraph1.vertices.leftJoin(pr3) { (id, a, b) => (a, b) }.foreach( println(_) )
-      println(error2)
-      assert(error2 < 1.0e-5)
+      println("Error between static and reference: %f".format(error3))
+      assert(error3 < 1.0e-5)
     }
   } // end of Grid PageRank
 
