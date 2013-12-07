@@ -113,7 +113,6 @@ class VTableReplicated[VD: ClassManifest](
           // println("Generating vTableReplicated for partition %d".format(pid))
           // println("vidToSrcEdgePosition:")
           // vidToSrcEdgePosition.iterator.foreach(pair => println("  " + pair))
-          // TODO(ankurdave): Fill srcEdgePositions with -1 by default, and check for that case
           val srcEdgePositions = Array.fill(vidToIndex.capacity)(-1)
           vidToSrcEdgePosition.iterator.foreach {
             case (vid, srcEdgePosition) =>
