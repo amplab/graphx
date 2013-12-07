@@ -113,38 +113,42 @@ object Analytics extends Logging {
 
         case "cc" => {
 
-           var numIter = Int.MaxValue
            var numVPart = 4
            var numEPart = 4
-           var isDynamic = false
            var partitionStrategy: PartitionStrategy = RandomVertexCut
 
            options.foreach{
-             case ("numIter", v) => numIter = v.toInt
-             case ("dynamic", v) => isDynamic = v.toBoolean
              case ("numEPart", v) => numEPart = v.toInt
              case ("numVPart", v) => numVPart = v.toInt
              case ("partStrategy", v) => partitionStrategy = pickPartitioner(v)
              case (opt, _) => throw new IllegalArgumentException("Invalid option: " + opt)
            }
 
-           if(!isDynamic && numIter == Int.MaxValue) {
-             println("Set number of iterations!")
-             sys.exit(1)
-           }
            println("======================================")
            println("|      Connected Components          |")
            println("--------------------------------------")
            println(" Using parameters:")
-           println(" \tDynamic:  " + isDynamic)
-           println(" \tNumIter:  " + numIter)
+           println(" \tnumEPart:  " + numEPart)
+           println(" \tnumVPart:  " + numVPart)
+           println(" \tpartStrategy:  " + partitionStrategy)
            println("======================================")
 
            val sc = new SparkContext(host, "ConnectedComponents(" + fname + ")")
+
+           val loadStart = System.currentTimeMillis
            val graph = GraphLoader.edgeListFile(sc, fname,
             minEdgePartitions = numEPart, partitionStrategy=partitionStrategy).cache()
+
+           logWarning("Num vertices: " + graph.vertices.count)
+
+           val computeStart = System.currentTimeMillis
+           logWarning("TIMEX Load time: %.1f".format((computeStart - loadStart).toDouble / 1000.0))
+
            val cc = ConnectedComponents.run(graph)
-           println("Components: " + cc.vertices.map{ case (vid,data) => data}.distinct())
+           logWarning("Components: " + cc.vertices.map{ case (vid,data) => data}.distinct())
+
+           logWarning("TIMEX Compute time: %.1f".format(
+             (System.currentTimeMillis - computeStart).toDouble / 1000.0))
            sc.stop()
          }
 
