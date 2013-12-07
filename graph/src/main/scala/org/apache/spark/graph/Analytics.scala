@@ -139,7 +139,7 @@ object Analytics extends Logging {
            val graph = GraphLoader.edgeListFile(sc, fname,
             minEdgePartitions = numEPart, partitionStrategy=partitionStrategy).cache()
 
-           logWarning("Num vertices: " + graph.vertices.count)
+           logWarning("Num triplets: " + graph.triplets.count)
 
            val computeStart = System.currentTimeMillis
            logWarning("TIMEX Load time: %.1f".format((computeStart - loadStart).toDouble / 1000.0))
