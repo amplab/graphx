@@ -1,5 +1,6 @@
 package org.apache.spark.graph
 
+import org.apache.spark.Logging
 
 /**
  * This object implements a Pregel-like bulk-synchronous
@@ -39,7 +40,7 @@ package org.apache.spark.graph
  * }}}
  *
  */
-object Pregel {
+object Pregel extends Logging {
 
 
   /**
@@ -181,6 +182,7 @@ object Pregel {
     // Loop
     var i = 0
     while (activeMessages > 0) {
+      logInfo("Dynamic pregel running at iteration " + i)
       // receive the messages
       val changedVerts = g.vertices.deltaJoin(messages)(vprog).cache() // updating the vertices
       // replicate the changed vertices

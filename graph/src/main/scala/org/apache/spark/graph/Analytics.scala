@@ -117,7 +117,7 @@ object Analytics extends Logging {
            var numEPart = 4
            var partitionStrategy: PartitionStrategy = RandomVertexCut
 
-           options.foreach{
+           options.foreach {
              case ("numEPart", v) => numEPart = v.toInt
              case ("numVPart", v) => numVPart = v.toInt
              case ("partStrategy", v) => partitionStrategy = pickPartitioner(v)
