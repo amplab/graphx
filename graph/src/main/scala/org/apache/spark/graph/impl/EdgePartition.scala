@@ -137,8 +137,12 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
   def srcEdgeIterator(srcId: Vid, startPos: Int) = new Iterator[Edge[ED]] {
     private[this] val edge = new Edge[ED]
     private[this] var pos = startPos
+    private[this] val srcIds = EdgePartition.this.srcIds
+    private[this] val dstIds = EdgePartition.this.dstIds
+    private[this] val data = EdgePartition.this.data
+    private[this] val totalSize = EdgePartition.this.size
 
-    override def hasNext: Boolean = pos >= 0 && pos < EdgePartition.this.size && srcIds(pos) == srcId
+    override def hasNext: Boolean = pos >= 0 && pos < totalSize && srcIds(pos) == srcId
 
     override def next(): Edge[ED] = {
       assert(srcIds(pos) == srcId)
