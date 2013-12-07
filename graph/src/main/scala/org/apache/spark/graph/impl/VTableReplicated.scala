@@ -58,6 +58,7 @@ class VTableReplicated[VD: ClassManifest](
     // Send each edge partition the vertex attributes it wants, as specified in
     // vertexPlacement
     val msgsByPartition = placement.zipPartitions(vTable.partitionsRDD)(VTableReplicated.buildBuffer(_, _)(vdManifest))
+      .setOrigin("broadcasting messages")
       .partitionBy(eTable.partitioner.get)
     // TODO: Consider using a specialized shuffler.
 

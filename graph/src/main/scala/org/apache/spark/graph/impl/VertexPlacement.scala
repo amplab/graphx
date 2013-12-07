@@ -54,7 +54,7 @@ class VertexPlacement(eTable: EdgeRDD[_], vTable: VertexRDD[_]) {
         }
       }
       vSet.iterator.map { vid => (vid, pid) }
-    }
+    }.setOrigin("redistributing vid 2 pid")
 
     val numPartitions = vTable.partitions.size
     vid2pid.partitionBy(vTable.partitioner.get).mapPartitions { iter =>

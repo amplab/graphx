@@ -943,7 +943,12 @@ abstract class RDD[T: ClassManifest](
   private var storageLevel: StorageLevel = StorageLevel.NONE
 
   /** Record user function generating this RDD. */
-  private[spark] val origin = Utils.formatSparkCallSite
+  private[spark] var origin = Utils.formatSparkCallSite
+
+  def setOrigin(origin: String): RDD[T] = {
+    this.origin = origin
+    this
+  }
 
   private[spark] def elementClassManifest: ClassManifest[T] = classManifest[T]
 
