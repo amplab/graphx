@@ -178,11 +178,15 @@ object PageRank extends Logging {
 
 
     var i = 0
+    val weight = (1.0 - resetProb)
     while (numDeltas > 0) {
       // Compute new deltas
       val deltas = deltaGraph
         .mapReduceTriplets[Double](
-          et => if (et.srcMask) Iterator((et.dstId, et.srcAttr * et.attr)) else Iterator.empty,
+          et => {
+            if (et.srcMask) Iterator((et.dstId, et.srcAttr * et.attr * weight))
+            else Iterator.empty
+          },
           _ + _)
         // .filter { case (vid, delta) => delta > tol }
         .cache()
@@ -196,7 +200,6 @@ object PageRank extends Logging {
       deltaGraph = deltaGraph.deltaJoinVertices(deltas).cache()
 
       // Update ranks
-      val weight = (1.0 - resetProb)
       ranks = ranks.leftZipJoin(deltas) { (vid, oldRank, deltaOpt) =>
         oldRank + weight * deltaOpt.getOrElse(0.0)
       }
