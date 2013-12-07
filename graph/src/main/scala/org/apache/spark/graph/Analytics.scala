@@ -25,16 +25,6 @@ object Analytics extends Logging {
       }
     }
 
-    def setLogLevels(level: org.apache.log4j.Level, loggers: TraversableOnce[String]) = {
-      loggers.map{
-        loggerName =>
-          val logger = org.apache.log4j.Logger.getLogger(loggerName)
-        val prevLevel = logger.getLevel()
-        logger.setLevel(level)
-        loggerName -> prevLevel
-      }.toMap
-    }
-
     def pickPartitioner(v: String): PartitionStrategy = {
       v match {
          case "RandomVertexCut" => RandomVertexCut
@@ -44,7 +34,6 @@ object Analytics extends Logging {
          case _ => throw new IllegalArgumentException("Invalid Partition Strategy: " + v)
        }
     }
-//       setLogLevels(org.apache.log4j.Level.DEBUG, Seq("org.apache.spark"))
 
      val serializer = "org.apache.spark.serializer.KryoSerializer"
      System.setProperty("spark.serializer", serializer)
@@ -91,22 +80,34 @@ object Analytics extends Logging {
          val graph = GraphLoader.edgeListFile(sc, fname,
           minEdgePartitions = numEPart, partitionStrategy=partitionStrategy).cache()
 
-         val startTime = System.currentTimeMillis
-         println("GRAPHX: starting tasks")
-         println("GRAPHX: Number of vertices " + graph.vertices.count)
-         println("GRAPHX: Number of edges " + graph.edges.count)
+         val loadStart = System.currentTimeMillis
+         logWarning("Num triplets: " + graph.triplets.count)
+
+         val computeStart = System.currentTimeMillis
+         logWarning("TIMEX Load time: %.1f".format((computeStart - loadStart).toDouble / 1000.0))
 
          //val pr = Analytics.pagerank(graph, numIter)
-          val pr = if(isDynamic) PageRank.runUntillConvergence(graph, tol, numIter)
-            else  PageRank.run(graph, numIter)
-         println("GRAPHX: Total rank: " + pr.vertices.map{ case (id,r) => r }.reduce(_+_) )
+         val pr = if (isDynamic) {
+           PageRank.runUntillConvergence(graph, tol, numIter)
+         } else {
+           PageRank.run(graph, numIter)
+         }
+
+         println("GRAPHX: Total rank: " + pr.vertices.map(_._2).reduce(_+_))
+
+         logWarning("TIMEX Compute time: %.1f".format(
+           (System.currentTimeMillis - computeStart).toDouble / 1000.0))
+
          if (!outFname.isEmpty) {
-           println("Saving pageranks of pages to " + outFname)
+           logWarning("Saving pageranks of pages to " + outFname)
            pr.vertices.map{case (id, r) => id + "\t" + r}.saveAsTextFile(outFname)
          }
-         println("GRAPHX: Runtime: " + ((System.currentTimeMillis - startTime)/1000.0) + " seconds")
 
-         Thread.sleep(100000)
+         import scala.sys.process._
+         "wget -r -k localhost:4040"!
+         val folder = "webui_pr_" + java.util.UUID.randomUUID.toString
+         val mvCmd = "mv localhost:4040 " + folder
+         mvCmd!
 
          sc.stop()
        }
