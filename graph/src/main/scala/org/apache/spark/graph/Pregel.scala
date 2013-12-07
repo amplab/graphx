@@ -180,18 +180,37 @@ object Pregel {
     var activeMessages = messages.count()
     // Loop
     var i = 0
+    var prevG: Graph[VD, ED] = null
+    var twoAgoG: Graph[VD, ED] = null
     while (activeMessages > 0) {
       // receive the messages
       val changedVerts = g.vertices.deltaJoin(messages)(vprog).cache() // updating the vertices
       // replicate the changed vertices
+      twoAgoG = prevG
+      prevG = g
       g = g.deltaJoinVertices(changedVerts)
+      g.vertices.cache()
 
       val oldMessages = messages
       // compute the messages
       messages = g.mapReduceTriplets(sendMsgFun, mergeMsg).cache()
       activeMessages = messages.count()
-      // after counting we can unpersist the old messages
+
+      // Unpersist everything before the latest cache call
+      // After counting we can unpersist the old messages
       oldMessages.unpersist(blocking=false)
+      // After the count, changedVerts is consumed by deltaJoinVertices
+      changedVerts.unpersist(blocking=false)
+      prevG.asInstanceOf[impl.GraphImpl[VD, ED]].vTableReplicated.unpersist()
+
+      if (activeMessages == 0) {
+        prevG.vertices.unpersist(blocking=false)
+      }
+
+      if (twoAgoG != null) {
+        twoAgoG.vertices.unpersist(blocking=false)
+      }
+
       // count the iteration
       i += 1
     }

@@ -33,6 +33,11 @@ class EdgeRDD[@specialized ED: ClassManifest](
   /** Persist this RDD with the default storage level (`MEMORY_ONLY`). */
   override def persist(): EdgeRDD[ED] = persist(StorageLevel.MEMORY_ONLY)
 
+  override def unpersist(blocking: Boolean = true): RDD[Edge[ED]] = {
+    partitionsRDD.unpersist(blocking)
+    this
+  }
+
   /** Persist this RDD with the default storage level (`MEMORY_ONLY`). */
   override def cache(): EdgeRDD[ED] = persist()
 
