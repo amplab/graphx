@@ -191,6 +191,7 @@ object Pregel extends Logging {
       twoAgoG = prevG
       prevG = g
       g = g.deltaJoinVertices(changedVerts)
+      g.vertices.cache()
 
       val oldMessages = messages
       // compute the messages
