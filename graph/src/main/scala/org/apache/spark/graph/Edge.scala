@@ -1,6 +1,5 @@
 package org.apache.spark.graph
 
-
 /**
  * A single directed edge consisting of a source id, target id,
  * and the data associated with the Edgee.
@@ -40,4 +39,11 @@ case class Edge[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) ED] 
    */
   def relativeDirection(vid: Vid): EdgeDirection =
     if (vid == srcId) EdgeDirection.Out else { assert(vid == dstId); EdgeDirection.In }
+}
+
+object Edge {
+  def lexicographicOrdering[ED] = new Ordering[Edge[ED]] {
+    override def compare(a: Edge[ED], b: Edge[ED]): Int =
+      Ordering[(Vid, Vid)].compare((a.srcId, a.dstId), (b.srcId, b.dstId))
+  }
 }

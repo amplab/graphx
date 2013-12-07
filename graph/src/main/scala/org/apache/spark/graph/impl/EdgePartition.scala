@@ -1,5 +1,7 @@
 package org.apache.spark.graph.impl
 
+import scala.util.Sorting
+
 import org.apache.spark.graph._
 import org.apache.spark.util.collection.OpenHashMap
 
@@ -14,7 +16,8 @@ import org.apache.spark.util.collection.OpenHashMap
 class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) ED: ClassManifest](
     val srcIds: Array[Vid],
     val dstIds: Array[Vid],
-    val data: Array[ED]) {
+    val data: Array[ED],
+    private var sorted_ : Boolean) {
 
   /**
    * Reverse all the edges in this partition.
@@ -23,7 +26,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
    *
    * @return a new edge partition with all edges reversed.
    */
-  def reverse: EdgePartition[ED] = new EdgePartition(dstIds, srcIds, data)
+  def reverse: EdgePartition[ED] = new EdgePartition(dstIds, srcIds, data, sorted)
 
   /**
    * Construct a new edge partition by applying the function f to all
@@ -46,7 +49,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
       newData(i) = f(edge)
       i += 1
     }
-    new EdgePartition(srcIds, dstIds, newData)
+    new EdgePartition(srcIds, dstIds, newData, sorted)
   }
 
   /**
@@ -89,7 +92,19 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
       newData(i) = kv._2
       i += 1
     }
-    new EdgePartition(newSrcIds, newDstIds, newData)
+    new EdgePartition(newSrcIds, newDstIds, newData, sorted)
+  }
+
+  def sort(): EdgePartition[ED] = {
+    val edges = this.iterator.map(_.copy()).toArray
+    Sorting.quickSort(edges)(Edge.lexicographicOrdering)
+    val builder = new EdgePartitionBuilder[ED]
+    for (e <- edges) {
+      builder.add(e.srcId, e.dstId, e.attr)
+    }
+    val result = builder.toEdgePartition
+    result.sorted = true
+    result
   }
 
   /**
@@ -117,5 +132,27 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
       pos += 1
       edge
     }
+  }
+
+  def srcEdgeIterator(srcId: Vid, startPos: Int) = new Iterator[Edge[ED]] {
+    private[this] val edge = new Edge[ED]
+    private[this] var pos = startPos
+
+    override def hasNext: Boolean = pos >= 0 && pos < EdgePartition.this.size && srcIds(pos) == srcId
+
+    override def next(): Edge[ED] = {
+      assert(srcIds(pos) == srcId)
+      edge.srcId = srcIds(pos)
+      edge.dstId = dstIds(pos)
+      edge.attr = data(pos)
+      pos += 1
+      edge
+    }
+  }
+
+  def sorted: Boolean = sorted_
+
+  private def sorted_=(sorted: Boolean) {
+    this.sorted_ = sorted
   }
 }
