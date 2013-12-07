@@ -9,6 +9,7 @@ import org.apache.spark.graph.util.BytecodeUtils
 import org.apache.spark.rdd.{ShuffledRDD, RDD}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util.ClosureCleaner
+import org.apache.spark.util.collection.OpenHashSet
 
 
 /**
@@ -262,19 +263,18 @@ object GraphImpl {
   {
     val etable = createETable(edges, partitionStrategy)
 
-    // Get the set of all vids
-    val vids = etable.flatMap { e =>
-      Iterator((e.srcId, 0), (e.dstId, 0))
-    }.setOrigin("redistributing vertices")
+    val vertexPartitioner = new HashPartitioner(edges.partitions.size)
+    val vertexPlacement = new VertexPlacement(etable, vertexPartitioner)
+    vertexPlacement.persist(StorageLevel.MEMORY_ONLY)
 
-    // Shuffle the vids and create the VertexRDD.
-    // TODO: Consider doing map side distinct before shuffle.
-    val shuffled = new ShuffledRDD[Vid, Int, (Vid, Int)](
-      vids, new HashPartitioner(edges.partitions.size))
-    shuffled.setSerializer(classOf[VidMsgSerializer].getName)
-    val vtable = VertexRDD(shuffled.mapValues(x => defaultValue))
+    val pid2vids = vertexPlacement.get(true, true).persist()
+    pid2vids.count()
 
-    val vertexPlacement = new VertexPlacement(etable, vtable)
+    val vtable = new VertexRDD[VD](pid2vids.mapPartitions({ iter =>
+      val pid2vid: Array[Array[Vid]] = iter.next()
+      Iterator(VertexPartition[VD](pid2vid.toIterator, defaultValue))
+    }, preservesPartitioning = true))
+
     new GraphImpl(vtable, etable, vertexPlacement)
   }
 

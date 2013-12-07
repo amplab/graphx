@@ -16,6 +16,18 @@ private[graph] object VertexPartition {
     new VertexPartition(map.keySet, map._values, map.keySet.getBitSet, null)
   }
 
+  def apply[VD: ClassManifest](arrs: Iterator[Array[Vid]], defaultVal: VD): VertexPartition[VD] = {
+    val map = new PrimitiveKeyOpenHashMap[Vid, VD]
+    arrs.foreach { arr =>
+      var i = 0
+      while (i < arr.length) {
+        map(arr(i)) = defaultVal
+        i += 1
+      }
+    }
+    new VertexPartition(map.keySet, map._values, map.keySet.getBitSet, null)
+  }
+
   def apply[VD: ClassManifest](iter: Iterator[(Vid, VD)], mergeFunc: (VD, VD) => VD)
     : VertexPartition[VD] =
   {
