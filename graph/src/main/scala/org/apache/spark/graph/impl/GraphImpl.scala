@@ -210,12 +210,27 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
 
       // Iterate over the active vertices
       val et = new EdgeTriplet[VD, ED](vertexPartition)
-      val mapOutputs = vertexPartition.edgePositionIterator.flatMap {
-        case (srcVid, srcAttr, srcEdgePosition) =>
-          // println("Looking at vertex %d --> index %d".format(srcVid, srcEdgePosition))
-          edgePartition.srcEdgeIterator(srcVid, srcEdgePosition).flatMap { e =>
+      val activeFraction = vertexPartition.size / vertexPartition.capacity
+      val mapOutputs =
+        if (activeFraction < 0.5) {
+          vertexPartition.edgePositionIterator.flatMap {
+            case (srcVid, srcAttr, srcEdgePosition) =>
+              // println("Looking at vertex %d --> index %d".format(srcVid, srcEdgePosition))
+              edgePartition.srcEdgeIterator(srcVid, srcEdgePosition).flatMap { e =>
+                et.set(e)
+                // println("  Edge (%d, %d) -> %s".format(e.srcId, e.dstId, e.attr))
+                if (mapUsesSrcAttr) {
+                  et.srcAttr = vertexPartition(e.srcId)
+                }
+                if (mapUsesDstAttr) {
+                  et.dstAttr = vertexPartition(e.dstId)
+                }
+                mapFunc(et)
+              }
+          }
+        } else {
+          edgePartition.iterator.flatMap { e =>
             et.set(e)
-            // println("  Edge (%d, %d) -> %s".format(e.srcId, e.dstId, e.attr))
             if (mapUsesSrcAttr) {
               et.srcAttr = vertexPartition(e.srcId)
             }
@@ -224,7 +239,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
             }
             mapFunc(et)
           }
-      }
+        }
       // Note: This doesn't allow users to send messages to arbitrary vertices.
       vertexPartition.aggregateUsingIndex(mapOutputs, reduceFunc).iterator
     }
