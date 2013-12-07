@@ -13,7 +13,7 @@ private[graph] object VertexPartition {
     iter.foreach { case (k, v) =>
       map(k) = v
     }
-    new VertexPartition(map.keySet, map._values, map.keySet.getBitSet)
+    new VertexPartition(map.keySet, map._values, map.keySet.getBitSet, null)
   }
 
   def apply[VD: ClassManifest](iter: Iterator[(Vid, VD)], mergeFunc: (VD, VD) => VD)
@@ -23,7 +23,7 @@ private[graph] object VertexPartition {
     iter.foreach { case (k, v) =>
       map.setMerge(k, v, mergeFunc)
     }
-    new VertexPartition(map.keySet, map._values, map.keySet.getBitSet)
+    new VertexPartition(map.keySet, map._values, map.keySet.getBitSet, null)
   }
 }
 
@@ -32,7 +32,8 @@ private[graph]
 class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
     val index: VertexIdToIndexMap,
     val values: Array[VD],
-    val mask: BitSet)
+    val mask: BitSet,
+    val srcEdgePositions: Array[Int])
   extends Logging {
 
   val capacity: Int = index.capacity
@@ -68,7 +69,7 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
       newValues(i) = f(index.getValue(i), values(i))
       i = mask.nextSetBit(i + 1)
     }
-    new VertexPartition[VD2](index, newValues, mask)
+    new VertexPartition[VD2](index, newValues, mask, srcEdgePositions)
   }
 
   /**
@@ -91,22 +92,7 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
       }
       i = mask.nextSetBit(i + 1)
     }
-    new VertexPartition(index, values, newMask)
-  }
-
-  def diff(other: VertexPartition[VD]): VertexPartition[VD] = {
-    assert(index == other.index)
-
-    val newMask = mask & other.mask
-
-    var i = newMask.nextSetBit(0)
-    while (i >= 0) {
-      if (values(i) == other.values(i)) {
-        newMask.unset(i)
-      }
-      i = mask.nextSetBit(i + 1)
-    }
-    new VertexPartition[VD](index, other.values, newMask)
+    new VertexPartition(index, values, newMask, srcEdgePositions)
   }
 
   /** Inner join another VertexPartition. */
@@ -126,7 +112,7 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
         newValues(i) = f(index.getValue(i), values(i), other.values(i))
         i = mask.nextSetBit(i + 1)
       }
-      new VertexPartition(index, newValues, newMask)
+      new VertexPartition(index, newValues, newMask, srcEdgePositions)
     }
   }
 
@@ -150,7 +136,7 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
         }
         i = mask.nextSetBit(i + 1)
       }
-      new VertexPartition(index, newValues, newMask)
+      new VertexPartition(index, newValues, newMask, srcEdgePositions)
     }
   }
 
@@ -170,7 +156,7 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
         newValues(i) = f(index.getValue(i), values(i), otherV)
         i = mask.nextSetBit(i + 1)
       }
-      new VertexPartition(index, newValues, mask)
+      new VertexPartition(index, newValues, mask, srcEdgePositions)
     }
   }
 
@@ -193,7 +179,7 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
       newMask.set(pos)
       newValues(pos) = vdata
     }
-    new VertexPartition[VD2](index, newValues, newMask)
+    new VertexPartition[VD2](index, newValues, newMask, srcEdgePositions)
   }
 
   def updateUsingIndex[VD2: ClassManifest](iter: Iterator[Product2[Vid, VD2]])
@@ -206,7 +192,7 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
       newMask.set(pos)
       newValues(pos) = vdata
     }
-    new VertexPartition[VD2](index, newValues, newMask)
+    new VertexPartition[VD2](index, newValues, newMask, srcEdgePositions)
   }
 
   def aggregateUsingIndex[VD2: ClassManifest](
@@ -225,7 +211,7 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
         newValues(pos) = vdata
       }
     }
-    new VertexPartition[VD2](index, newValues, newMask)
+    new VertexPartition[VD2](index, newValues, newMask, srcEdgePositions)
   }
 
   /**
@@ -237,8 +223,11 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
     for ((k, v) <- this.iterator) {
       hashMap.setMerge(k, v, arbitraryMerge)
     }
-    new VertexPartition(hashMap.keySet, hashMap._values, hashMap.keySet.getBitSet)
+    new VertexPartition(hashMap.keySet, hashMap._values, hashMap.keySet.getBitSet, null)
   }
 
   def iterator: Iterator[(Vid, VD)] = mask.iterator.map(ind => (index.getValue(ind), values(ind)))
+
+  def edgePositionIterator: Iterator[(Vid, VD, Int)] =
+    mask.iterator.map(ind => (index.getValue(ind), values(ind), srcEdgePositions(ind)))
 }

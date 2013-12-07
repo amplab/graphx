@@ -171,7 +171,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
     }.mapPartitionsWithIndex( { (pid, iter) =>
       val builder = new EdgePartitionBuilder[ED]()(edManifest)
       iter.foreach { et => builder.add(et.srcId, et.dstId, et.attr) }
-      val edgePartition = builder.toEdgePartition
+      val edgePartition = builder.toEdgePartition.sort()
       Iterator((pid, edgePartition))
     }, preservesPartitioning = true)).cache()
 
@@ -208,20 +208,25 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
     val preAgg = edges.zipEdgePartitions(vs) { (edgePartition, vTableReplicatedIter) =>
       val (_, vertexPartition) = vTableReplicatedIter.next()
 
-      // Iterate over the partition
+      // Iterate over the active vertices
       val et = new EdgeTriplet[VD, ED](vertexPartition)
-      val filteredEdges = edgePartition.iterator.flatMap { e =>
-        et.set(e)
-        if (mapUsesSrcAttr) {
-          et.srcAttr = vertexPartition(e.srcId)
-        }
-        if (mapUsesDstAttr) {
-          et.dstAttr = vertexPartition(e.dstId)
-        }
-        mapFunc(et)
+      val mapOutputs = vertexPartition.edgePositionIterator.flatMap {
+        case (srcVid, srcAttr, srcEdgePosition) =>
+          // println("Looking at vertex %d --> index %d".format(srcVid, srcEdgePosition))
+          edgePartition.srcEdgeIterator(srcVid, srcEdgePosition).flatMap { e =>
+            et.set(e)
+            // println("  Edge (%d, %d) -> %s".format(e.srcId, e.dstId, e.attr))
+            if (mapUsesSrcAttr) {
+              et.srcAttr = vertexPartition(e.srcId)
+            }
+            if (mapUsesDstAttr) {
+              et.dstAttr = vertexPartition(e.dstId)
+            }
+            mapFunc(et)
+          }
       }
       // Note: This doesn't allow users to send messages to arbitrary vertices.
-      vertexPartition.aggregateUsingIndex(filteredEdges, reduceFunc).iterator
+      vertexPartition.aggregateUsingIndex(mapOutputs, reduceFunc).iterator
     }
 
     // do the final reduction reusing the index map
@@ -320,19 +325,19 @@ object GraphImpl {
       val eTable = edges.map { e =>
         val part: Pid = partitionStrategy.getPartition(e.srcId, e.dstId, numPartitions)
 
-        // Should we be using 3-tuple or an optimized class
-        new MessageToPartition(part, (e.srcId, e.dstId, e.attr))
-      }
-    .partitionBy(new HashPartitioner(numPartitions))
-    .mapPartitionsWithIndex( { (pid, iter) =>
-      val builder = new EdgePartitionBuilder[ED]
-      iter.foreach { message =>
-        val data = message.data
-        builder.add(data._1, data._2, data._3)
-      }
-      val edgePartition = builder.toEdgePartition
-      Iterator((pid, edgePartition))
-    }, preservesPartitioning = true).cache()
+      // Should we be using 3-tuple or an optimized class
+      new MessageToPartition(part, (e.srcId, e.dstId, e.attr))
+    }
+      .partitionBy(new HashPartitioner(numPartitions))
+      .mapPartitionsWithIndex( { (pid, iter) =>
+        val builder = new EdgePartitionBuilder[ED]
+        iter.foreach { message =>
+          val data = message.data
+          builder.add(data._1, data._2, data._3)
+        }
+        val edgePartition = builder.toEdgePartition.sort()
+        Iterator((pid, edgePartition))
+      }, preservesPartitioning = true).cache()
     new EdgeRDD(eTable)
   }
 

@@ -5,7 +5,7 @@ import org.apache.spark.util.collection.PrimitiveVector
 
 
 //private[graph]
-class EdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassManifest] {
+class EdgePartitionBuilder[ED: ClassManifest] {
 
   val srcIds = new PrimitiveVector[Vid]
   val dstIds = new PrimitiveVector[Vid]
@@ -19,6 +19,6 @@ class EdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassManifest] {
   }
 
   def toEdgePartition: EdgePartition[ED] = {
-    new EdgePartition(srcIds.trim().array, dstIds.trim().array, dataBuilder.trim().array)
+    new EdgePartition(srcIds.trim().array, dstIds.trim().array, dataBuilder.trim().array, false)
   }
 }
