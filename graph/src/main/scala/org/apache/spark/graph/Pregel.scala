@@ -1,6 +1,6 @@
 package org.apache.spark.graph
 
-import org.apache.spark.Logging
+import org.apache.spark.{SparkEnv, Logging}
 
 /**
  * This object implements a Pregel-like bulk-synchronous
@@ -197,6 +197,11 @@ object Pregel extends Logging {
       // compute the messages
       messages = g.mapReduceTriplets(sendMsgFun, mergeMsg).cache()
       activeMessages = messages.count()
+
+      // Remove shuffle blocks
+      messages.context.parallelize(1 to 16, 16).foreach { i =>
+        SparkEnv.get.blockManager.shuffleBlockManager.removeAllShuffleStuff()
+      }
 
       // Unpersist everything before the latest cache call
       // After counting we can unpersist the old messages
