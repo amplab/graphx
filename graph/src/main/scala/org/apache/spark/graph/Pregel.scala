@@ -168,11 +168,11 @@ object Pregel extends Logging {
     : Graph[VD, ED] = {
 
     def sendMsgFun(edge: EdgeTriplet[VD, ED]): Iterator[(Vid, A)] = {
-      if (edge.srcMask) {
+      //if (edge.srcMask) {
         sendMsg(edge)
-      } else {
-        Iterator.empty
-      }
+      //} else {
+      //  Iterator.empty
+      //}
     }
 
     var g = graph.mapVertices( (vid, vdata) => vprog(vid, vdata, initialMsg) )
