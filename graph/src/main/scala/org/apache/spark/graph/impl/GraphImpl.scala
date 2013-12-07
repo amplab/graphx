@@ -236,12 +236,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
   }
 
   override def deltaJoinVertices(changedVerts: VertexRDD[VD]): Graph[VD, ED] = {
-    val newVerts = vertices.leftZipJoin(changedVerts) { (vid, oldAttr, newAttrOpt) =>
-      newAttrOpt match {
-        case Some(newAttr) => newAttr
-        case None => oldAttr
-      }
-    }
+    val newVerts = vertices.update(changedVerts)
     val newVTableReplicated = new VTableReplicated(
       changedVerts, edges, vertexPlacement, Some(vTableReplicated))
     new GraphImpl(newVerts, edges, vertexPlacement, newVTableReplicated)

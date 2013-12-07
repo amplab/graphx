@@ -242,6 +242,25 @@ class VertexRDD[@specialized VD: ClassManifest](
   }
 
   /**
+   * If a vertex is defined in other, use that value. Otherwise, use the value from this partition.
+   * This is similar to
+   *
+   * {{{
+   * this.leftZipJoin(other) { (vid, oldAttr, newAttrOpt) =>
+   *   newAttrOpt match {
+   *     case Some(newAttr) => newAttr
+   *     case None => oldAttr
+   *   }
+   * }
+   * }}}
+   */
+  def update(other: VertexRDD[VD]): VertexRDD[VD] = {
+    this.zipVertexPartitions(other) { (thisPart, otherPart) =>
+      thisPart.update(otherPart)
+    }
+  }
+
+  /**
    * Left join this VertexSet with an RDD containing vertex attribute
    * pairs.  If the other RDD is backed by a VertexSet with the same
    * index than the efficient leftZipJoin implementation is used.  The

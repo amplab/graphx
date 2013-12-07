@@ -196,6 +196,34 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
     new VertexPartition[VD2](index, newValues, newMask)
   }
 
+  /**
+   * If a vertex is defined in other, use that value. Otherwise, use the value from this partition.
+   * This is similar to
+   *
+   * {{{
+   * this.leftJoin(other) { (vid, oldAttr, newAttrOpt) =>
+   *   newAttrOpt match {
+   *     case Some(newAttr) => newAttr
+   *     case None => oldAttr
+   *   }
+   * }
+   * }}}
+   */
+  def update(other: VertexPartition[VD]): VertexPartition[VD] = {
+    assert (index == other.index)
+    val newValues = new Array[VD](capacity)
+    System.arraycopy(values, 0, newValues, 0, values.length)
+
+    val updateMask = other.mask
+    val updateValues = other.values
+    var i = updateMask.nextSetBit(0)
+    while (i >= 0) {
+      newValues(i) = updateValues(i)
+      i = updateMask.nextSetBit(i + 1)
+    }
+    new VertexPartition(index, newValues, mask)
+  }
+
   def updateUsingIndex[VD2: ClassManifest](iter: Iterator[Product2[Vid, VD2]])
     : VertexPartition[VD2] = {
     val newMask = new BitSet(capacity)
