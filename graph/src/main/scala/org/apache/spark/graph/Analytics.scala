@@ -145,7 +145,8 @@ object Analytics extends Logging {
            logWarning("TIMEX Load time: %.1f".format((computeStart - loadStart).toDouble / 1000.0))
 
            val cc = ConnectedComponents.run(graph)
-           logWarning("Components: " + cc.vertices.map{ case (vid,data) => data}.distinct())
+           //logWarning("Components: " + cc.vertices.map{ case (vid,data) => data}.distinct())
+           println("vertices: " + cc.vertices.count())
 
            logWarning("TIMEX Compute time: %.1f".format(
              (System.currentTimeMillis - computeStart).toDouble / 1000.0))
