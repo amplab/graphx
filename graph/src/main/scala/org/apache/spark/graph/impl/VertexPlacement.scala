@@ -1,5 +1,6 @@
 package org.apache.spark.graph.impl
 
+import org.apache.spark.Partitioner
 import org.apache.spark.SparkContext._
 import org.apache.spark.graph._
 import org.apache.spark.rdd.RDD
@@ -10,7 +11,11 @@ import org.apache.spark.util.collection.PrimitiveVector
  * Stores the layout of replicated vertex attributes for GraphImpl. Tells each
  * partition of the vertex data where it should go.
  */
-class VertexPlacement(eTable: EdgeRDD[_], vTable: VertexRDD[_]) {
+class VertexPlacement(eTable: EdgeRDD[_], vertexPartitioner: Partitioner) {
+
+  def this(eTable: EdgeRDD[_], vTable: VertexRDD[_]) {
+    this(eTable, vTable.partitioner.get)
+  }
 
   val bothAttrs: RDD[Array[Array[Vid]]] = createPid2Vid(true, true)
   val srcAttrOnly: RDD[Array[Array[Vid]]] = createPid2Vid(true, false)
@@ -54,16 +59,17 @@ class VertexPlacement(eTable: EdgeRDD[_], vTable: VertexRDD[_]) {
         }
       }
       vSet.iterator.map { vid => (vid, pid) }
-    }
+    }.setOrigin("redistributing vid 2 pid")
 
-    val numPartitions = vTable.partitions.size
-    vid2pid.partitionBy(vTable.partitioner.get).mapPartitions { iter =>
+    val numPartitions = vertexPartitioner.numPartitions
+    vid2pid.partitionBy(vertexPartitioner).mapPartitions({ iter =>
       val pid2vid = Array.fill(numPartitions)(new PrimitiveVector[Vid])
       for ((vid, pid) <- iter) {
         pid2vid(pid) += vid
       }
 
       Iterator(pid2vid.map(_.trim().array))
-    }.setName("VertexPlacement %s %s".format(includeSrcAttr, includeDstAttr))
+    }, preservesPartitioning = true).setName(
+        "VertexPlacement %s %s".format(includeSrcAttr, includeDstAttr))
   }
 }

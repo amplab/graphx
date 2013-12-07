@@ -9,6 +9,7 @@ import org.apache.spark.graph.util.BytecodeUtils
 import org.apache.spark.rdd.{ShuffledRDD, RDD}
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util.ClosureCleaner
+import org.apache.spark.util.collection.OpenHashSet
 
 
 /**
@@ -260,21 +261,20 @@ object GraphImpl {
       defaultValue: VD,
       partitionStrategy: PartitionStrategy): GraphImpl[VD, ED] =
   {
-    val etable = createETable(edges, partitionStrategy).cache()
+    val etable = createETable(edges, partitionStrategy)
 
-    // Get the set of all vids
-    val vids = etable.flatMap { e =>
-      Iterator((e.srcId, 0), (e.dstId, 0))
-    }
+    val vertexPartitioner = new HashPartitioner(edges.partitions.size)
+    val vertexPlacement = new VertexPlacement(etable, vertexPartitioner)
+    vertexPlacement.persist(StorageLevel.MEMORY_ONLY)
 
-    // Shuffle the vids and create the VertexRDD.
-    // TODO: Consider doing map side distinct before shuffle.
-    val shuffled = new ShuffledRDD[Vid, Int, (Vid, Int)](
-      vids, new HashPartitioner(edges.partitions.size))
-    shuffled.setSerializer(classOf[VidMsgSerializer].getName)
-    val vtable = VertexRDD(shuffled.mapValues(x => defaultValue))
+    val pid2vids = vertexPlacement.get(true, true).persist()
+    pid2vids.count()
 
-    val vertexPlacement = new VertexPlacement(etable, vtable)
+    val vtable = new VertexRDD[VD](pid2vids.mapPartitions({ iter =>
+      val pid2vid: Array[Array[Vid]] = iter.next()
+      Iterator(VertexPartition[VD](pid2vid.toIterator, defaultValue))
+    }, preservesPartitioning = true))
+
     new GraphImpl(vtable, etable, vertexPlacement)
   }
 
@@ -317,26 +317,32 @@ object GraphImpl {
    */
   protected def createETable[ED: ClassManifest](
       edges: RDD[Edge[ED]],
-    partitionStrategy: PartitionStrategy): EdgeRDD[ED] = {
-      // Get the number of partitions
-      val numPartitions = edges.partitions.size
+      partitionStrategy: PartitionStrategy): EdgeRDD[ED] =
+  {
+    // Get the number of partitions
+    val numPartitions = edges.partitions.size
 
-      val eTable = edges.map { e =>
-        val part: Pid = partitionStrategy.getPartition(e.srcId, e.dstId, numPartitions)
+    val eTable = edges.map { e =>
+      val part: Pid = partitionStrategy.getPartition(e.srcId, e.dstId, numPartitions)
 
       // Should we be using 3-tuple or an optimized class
       new MessageToPartition(part, (e.srcId, e.dstId, e.attr))
     }
-      .partitionBy(new HashPartitioner(numPartitions))
-      .mapPartitionsWithIndex( { (pid, iter) =>
-        val builder = new EdgePartitionBuilder[ED]
-        iter.foreach { message =>
-          val data = message.data
-          builder.add(data._1, data._2, data._3)
-        }
-        val edgePartition = builder.toEdgePartition.sort()
-        Iterator((pid, edgePartition))
-      }, preservesPartitioning = true).cache()
+    .setOrigin("createETable: repartitioning edges")
+    .partitionBy(new HashPartitioner(numPartitions))
+    .mapPartitionsWithIndex( { (pid, iter) =>
+      val builder = new EdgePartitionBuilder[ED]
+      iter.foreach { message =>
+        val data = message.data
+        builder.add(data._1, data._2, data._3)
+      }
+      val edgePartition = builder.toEdgePartition.sort()
+      Iterator((pid, edgePartition))
+    }, preservesPartitioning = true).cache()
+
+    // Force etable to go into cache.
+    eTable.setOrigin("etable").count()
+
     new EdgeRDD(eTable)
   }
 
