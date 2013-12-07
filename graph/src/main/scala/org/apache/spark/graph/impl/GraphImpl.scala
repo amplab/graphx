@@ -210,7 +210,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
 
       // Iterate over the active vertices
       val et = new EdgeTriplet[VD, ED](vertexPartition)
-      val activeFraction = vertexPartition.size / vertexPartition.capacity
+      val activeFraction = vertexPartition.size / vertexPartition.capacity.toFloat
       val mapOutputs =
         if (activeFraction < 0.5) {
           vertexPartition.edgePositionIterator.flatMap {
