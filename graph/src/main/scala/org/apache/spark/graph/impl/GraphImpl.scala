@@ -260,7 +260,7 @@ object GraphImpl {
       defaultValue: VD,
       partitionStrategy: PartitionStrategy): GraphImpl[VD, ED] =
   {
-    val etable = createETable(edges, partitionStrategy).cache()
+    val etable = createETable(edges, partitionStrategy)
 
     // Get the set of all vids
     val vids = etable.flatMap { e =>
@@ -339,6 +339,10 @@ object GraphImpl {
       val edgePartition = builder.toEdgePartition.sort()
       Iterator((pid, edgePartition))
     }, preservesPartitioning = true).cache()
+
+    // Force etable to go into cache.
+    eTable.setOrigin("etable").count()
+
     new EdgeRDD(eTable)
   }
 
