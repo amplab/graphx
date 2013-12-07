@@ -11,6 +11,8 @@ class EdgeRDD[@specialized ED: ClassManifest](
     val partitionsRDD: RDD[(Pid, EdgePartition[ED])])
   extends RDD[Edge[ED]](partitionsRDD.context, List(new OneToOneDependency(partitionsRDD))) {
 
+  partitionsRDD.setName("EdgeRDD")
+
   override val partitioner = partitionsRDD.partitioner
 
   override protected def getPartitions: Array[Partition] = partitionsRDD.partitions
@@ -32,6 +34,11 @@ class EdgeRDD[@specialized ED: ClassManifest](
 
   /** Persist this RDD with the default storage level (`MEMORY_ONLY`). */
   override def persist(): EdgeRDD[ED] = persist(StorageLevel.MEMORY_ONLY)
+
+  override def unpersist(blocking: Boolean = true): RDD[Edge[ED]] = {
+    partitionsRDD.unpersist(blocking)
+    this
+  }
 
   /** Persist this RDD with the default storage level (`MEMORY_ONLY`). */
   override def cache(): EdgeRDD[ED] = persist()

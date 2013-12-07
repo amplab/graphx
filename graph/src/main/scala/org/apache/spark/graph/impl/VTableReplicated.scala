@@ -37,6 +37,13 @@ class VTableReplicated[VD: ClassManifest](
     }
   }
 
+  def unpersist() {
+    bothAttrs.unpersist(false)
+    srcAttrOnly.unpersist(false)
+    dstAttrOnly.unpersist(false)
+    noAttrs.unpersist(false)
+  }
+
   private def createVTableReplicated(
        vTable: VertexRDD[VD],
        eTable: EdgeRDD[_],
@@ -50,7 +57,7 @@ class VTableReplicated[VD: ClassManifest](
     // Send each edge partition the vertex attributes it wants, as specified in
     // vertexPlacement
     val msgsByPartition = placement.zipPartitions(vTable.partitionsRDD)(VTableReplicated.buildBuffer(_, _)(vdManifest))
-      .partitionBy(eTable.partitioner.get).cache()
+      .partitionBy(eTable.partitioner.get)
     // TODO: Consider using a specialized shuffler.
 
     prevVTableReplicated match {
@@ -62,7 +69,7 @@ class VTableReplicated[VD: ClassManifest](
           val (pid, vertexPartition) = vTableIter.next()
           val newVPart = vertexPartition.updateUsingIndex(msgsIter.flatMap(_._2.iterator))(vdManifest)
           Iterator((pid, newVPart))
-        }.cache()
+        }.cache().setName("VTableReplicated delta %s %s".format(includeSrcAttr, includeDstAttr))
 
       case None =>
         // Within each edge partition, create a local map from vid to an index into
@@ -96,7 +103,7 @@ class VTableReplicated[VD: ClassManifest](
             }
           }
           Iterator((pid, new VertexPartition(vidToIndex, vertexArray, vidToIndex.getBitSet)(vdManifest)))
-        }.cache()
+        }.cache().setName("VTableReplicated %s %s".format(includeSrcAttr, includeDstAttr))
     }
   }
 
