@@ -184,7 +184,7 @@ object PageRank extends Logging {
         .mapReduceTriplets[Double](
           et => if (et.srcMask) Iterator((et.dstId, et.srcAttr * et.attr)) else Iterator.empty,
           _ + _)
-//        .filter { case (vid, delta) => delta > tol }
+        // .filter { case (vid, delta) => delta > tol }
         .cache()
       numDeltas = deltas.count()
       logInfo("Standalone PageRank: iter %d has %d deltas".format(i, numDeltas))
@@ -192,7 +192,7 @@ object PageRank extends Logging {
       println("[iter %d] deltas:".format(i))
       printVerts(deltas)
 
-      // Apply deltas
+      // Apply deltas. Sets the mask for each vertex to false if it does not appear in deltas.
       deltaGraph = deltaGraph.deltaJoinVertices(deltas).cache()
 
       // Update ranks

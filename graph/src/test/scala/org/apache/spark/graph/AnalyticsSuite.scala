@@ -35,13 +35,17 @@ object GridPageRank {
     for (iter <- 0 until nIter) {
       val oldPr = pr
       pr = new Array[Double](nRows * nCols)
-      println("iter %d in reference".format(iter))
+      println("=== iter %d in reference".format(iter))
+      println("ranks:")
       for (ind <- 0 until (nRows * nCols)) {
         pr(ind) = resetProb + (1.0 - resetProb) *
           inNbrs(ind).map( nbr => oldPr(nbr) / outDegree(nbr)).sum
-        println("ind %d rank %f".format(ind, pr(ind)))
+        println("(%d, %f)".format(ind, pr(ind)))
       }
-
+      // println("deltas:")
+      // for (ind <- 0 until (nRows * nCols)) {
+      //   println("(%d, %f)".format(ind, inNbrs(ind).map( nbr => (pr(nbr) - oldPr(nbr)) / outDegree(nbr)).sum))
+      // }
     }
     (0L until (nRows * nCols)).zip(pr)
   }
@@ -94,7 +98,7 @@ class AnalyticsSuite extends FunSuite with LocalSparkContext {
       val cols = 2
       val resetProb = 0.15
       val tol = 0.0001
-      val numIter = 50
+      val numIter = 10
 
       val gridGraph = GraphGenerators.gridGraph(sc, rows, cols).cache()
       val staticRanks = PageRank.run(gridGraph, numIter, resetProb).vertices.cache()
