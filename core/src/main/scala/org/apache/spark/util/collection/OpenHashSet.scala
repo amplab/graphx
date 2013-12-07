@@ -249,8 +249,9 @@ class OpenHashSet[@specialized(Long, Int) T: ClassManifest](
    * in the lower bits, similar to java.util.HashMap
    */
   private def hashcode(h: Int): Int = {
-    val r = h ^ (h >>> 20) ^ (h >>> 12)
-    r ^ (r >>> 7) ^ (r >>> 4)
+    //val r = h ^ (h >>> 20) ^ (h >>> 12)
+    //r ^ (r >>> 7) ^ (r >>> 4)
+    it.unimi.dsi.fastutil.HashCommon.murmurHash3(h)
   }
 
   private def nextPowerOf2(n: Int): Int = {
