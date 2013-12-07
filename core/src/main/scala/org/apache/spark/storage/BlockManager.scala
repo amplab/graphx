@@ -736,7 +736,7 @@ private[spark] class BlockManager(
     if (info != null) info.synchronized {
       // Removals are idempotent in disk store and memory store. At worst, we get a warning.
       val removedFromMemory = memoryStore.remove(blockId)
-      val removedFromDisk = diskStore.remove(blockId)
+      val removedFromDisk = false //diskStore.remove(blockId)
       if (!removedFromMemory && !removedFromDisk) {
         logWarning("Block " + blockId + " could not be removed as it was not found in either " +
           "the disk or memory store")
