@@ -37,14 +37,7 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
 
   val capacity: Int = index.capacity
 
-  //def size: Int = mask.cardinality()
-
-  def setSize(s: Int): VertexPartition[VD] = {
-    this.size = s
-    this
-  }
-
-  var size: Int = 0
+  def size: Int = mask.cardinality()
 
   /** Return the vertex attribute for the given vertex ID. */
   def apply(vid: Vid): VD = values(index.getPos(vid))
@@ -71,13 +64,11 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
     // Construct a view of the map transformation
     val newValues = new Array[VD2](capacity)
     var i = mask.nextSetBit(0)
-    var newSize = 0
     while (i >= 0) {
       newValues(i) = f(index.getValue(i), values(i))
       i = mask.nextSetBit(i + 1)
-      newSize += 1
     }
-    new VertexPartition[VD2](index, newValues, mask).setSize(newSize)
+    new VertexPartition[VD2](index, newValues, mask)
   }
 
   /**
@@ -94,15 +85,13 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
     val newMask = new BitSet(capacity)
     // Iterate over the active bits in the old mask and evaluate the predicate
     var i = mask.nextSetBit(0)
-    var newSize = 0
     while (i >= 0) {
       if (pred(index.getValue(i), values(i))) {
         newMask.set(i)
-        newSize += 1
       }
       i = mask.nextSetBit(i + 1)
     }
-    new VertexPartition(index, values, newMask).setSize(newSize)
+    new VertexPartition(index, values, newMask)
   }
 
   def diff(other: VertexPartition[VD]): VertexPartition[VD] = {
@@ -131,14 +120,13 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
     } else {
       val newValues = new Array[VD3](capacity)
       val newMask = mask & other.mask
-      var newSize = 0
+
       var i = newMask.nextSetBit(0)
       while (i >= 0) {
         newValues(i) = f(index.getValue(i), values(i), other.values(i))
         i = mask.nextSetBit(i + 1)
-        newSize += 1
       }
-      new VertexPartition(index, newValues, newMask).setSize(newSize)
+      new VertexPartition(index, newValues, newMask)
     }
   }
 
@@ -153,18 +141,16 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
     } else {
       val newValues = new Array[VD3](capacity)
       val newMask = mask & other.mask
-      var newSize = 0
+
       var i = newMask.nextSetBit(0)
       while (i >= 0) {
         newValues(i) = f(index.getValue(i), values(i), other.values(i))
         if (newValues(i) == values(i)) {
           newMask.unset(i)
-        } else {
-          newSize += 1
         }
         i = mask.nextSetBit(i + 1)
       }
-      new VertexPartition(index, newValues, newMask).setSize(newSize)
+      new VertexPartition(index, newValues, newMask)
     }
   }
 
@@ -177,15 +163,14 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
       leftJoin(createUsingIndex(other.iterator))(f)
     } else {
       val newValues = new Array[VD3](capacity)
-      var newSize = 0
+
       var i = mask.nextSetBit(0)
       while (i >= 0) {
         val otherV: Option[VD2] = if (other.mask.get(i)) Some(other.values(i)) else None
         newValues(i) = f(index.getValue(i), values(i), otherV)
         i = mask.nextSetBit(i + 1)
-        newSize += 1
       }
-      new VertexPartition(index, newValues, mask).setSize(newSize)
+      new VertexPartition(index, newValues, mask)
     }
   }
 
@@ -203,29 +188,25 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
     : VertexPartition[VD2] = {
     val newMask = new BitSet(capacity)
     val newValues = new Array[VD2](capacity)
-    var newSize = 0
     iter.foreach { case (vid, vdata) =>
       val pos = index.getPos(vid)
       newMask.set(pos)
       newValues(pos) = vdata
-      newSize += 1
     }
-    new VertexPartition[VD2](index, newValues, newMask).setSize(newSize)
+    new VertexPartition[VD2](index, newValues, newMask)
   }
 
   def updateUsingIndex[VD2: ClassManifest](iter: Iterator[Product2[Vid, VD2]])
     : VertexPartition[VD2] = {
     val newMask = new BitSet(capacity)
     val newValues = new Array[VD2](capacity)
-    var newSize = 0
     System.arraycopy(values, 0, newValues, 0, newValues.length)
     iter.foreach { case (vid, vdata) =>
       val pos = index.getPos(vid)
       newMask.set(pos)
       newValues(pos) = vdata
-      newSize += 1
     }
-    new VertexPartition[VD2](index, newValues, newMask).setSize(newSize)
+    new VertexPartition[VD2](index, newValues, newMask)
   }
 
   def aggregateUsingIndex[VD2: ClassManifest](
@@ -233,7 +214,6 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
   {
     val newMask = new BitSet(capacity)
     val newValues = new Array[VD2](capacity)
-    var newSize = 0
     iter.foreach { product =>
       val vid = product._1
       val vdata = product._2
@@ -243,10 +223,9 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
       } else { // otherwise just store the new value
         newMask.set(pos)
         newValues(pos) = vdata
-        newSize += 1
       }
     }
-    new VertexPartition[VD2](index, newValues, newMask).setSize(newSize)
+    new VertexPartition[VD2](index, newValues, newMask)
   }
 
   /**
