@@ -169,7 +169,8 @@ private[spark] class ShuffleMapTask(
       val compressedSizes: Array[Byte] = shuffle.writers.map { writer: BlockObjectWriter =>
         val bytes = writer.commit()
         if (bytes != null) {
-          blockManager.putBytes(writer.blockId, ByteBuffer.wrap(bytes), StorageLevel.MEMORY_ONLY, tellMaster = false)
+          blockManager.putBytes(
+            writer.blockId, ByteBuffer.wrap(bytes), StorageLevel.MEMORY_ONLY_SER, tellMaster = false)
         }
         writer.close()
         val size = writer.fileSegment().length
