@@ -2,6 +2,7 @@ package org.apache.spark.graph.impl
 
 import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
+import org.apache.spark.util.collection.PrimitiveKeyOpenHashMap
 import org.apache.spark.util.collection.{PrimitiveVector, OpenHashSet}
 
 import org.apache.spark.graph._
@@ -73,17 +74,30 @@ class VTableReplicated[VD: ClassManifest](
         val localVidMap = eTable.partitionsRDD.mapPartitions(_.map {
           case (pid, epart) =>
             val vidToIndex = new VertexIdToIndexMap
+            val vidToSrcEdgePosition = new PrimitiveKeyOpenHashMap[Long, Int]
+            assert(epart.sorted)
+            // println("Generating localVidMap for partition %d".format(pid))
+            var currentSrcId: Vid = -1
+            var i = 0
             epart.foreach { e =>
+              if (e.srcId != currentSrcId || i == 0) {
+                // println("  [%d] Edge (%d, %d) is the start of a new block".format(i, e.srcId, e.dstId))
+                currentSrcId = e.srcId
+                vidToSrcEdgePosition.update(e.srcId, i)
+              } else {
+                // println("  [%d] Edge (%d, %d)".format(i, e.srcId, e.dstId))
+              }
               vidToIndex.add(e.srcId)
               vidToIndex.add(e.dstId)
+              i += 1
             }
-            (pid, vidToIndex)
+            (pid, (vidToIndex, vidToSrcEdgePosition))
         }, preservesPartitioning = true).cache()
 
         // Within each edge partition, place the vertex attributes received from
         // msgsByPartition into the correct locations specified in localVidMap
         localVidMap.zipPartitions(msgsByPartition) { (mapIter, msgsIter) =>
-          val (pid, vidToIndex) = mapIter.next()
+          val (pid, (vidToIndex, vidToSrcEdgePosition)) = mapIter.next()
           assert(!mapIter.hasNext)
           // Populate the vertex array using the vidToIndex map
           val vertexArray = vdManifest.newArray(vidToIndex.capacity)
@@ -91,11 +105,25 @@ class VTableReplicated[VD: ClassManifest](
             for (i <- 0 until block.vids.size) {
               val vid = block.vids(i)
               val attr = block.attrs(i)
-              val ind = vidToIndex.getPos(vid) & OpenHashSet.POSITION_MASK
+              val ind = vidToIndex.getPos(vid)
               vertexArray(ind) = attr
             }
           }
-          Iterator((pid, new VertexPartition(vidToIndex, vertexArray, vidToIndex.getBitSet)(vdManifest)))
+          // Populate the map from vid to source edge position in the edge partition
+          // println("Generating vTableReplicated for partition %d".format(pid))
+          // println("vidToSrcEdgePosition:")
+          // vidToSrcEdgePosition.iterator.foreach(pair => println("  " + pair))
+          val srcEdgePositions = Array.fill(vidToIndex.capacity)(-1)
+          vidToSrcEdgePosition.iterator.foreach {
+            case (vid, srcEdgePosition) =>
+              if (vidToIndex.getPos(vid) != -1) {
+                val ind = vidToIndex.getPos(vid)
+                // println("  Inserting edge index for vertex %d (local index %d) --> %d".format(vid, ind, srcEdgePosition))
+                srcEdgePositions(ind) = srcEdgePosition
+              }
+          }
+          Iterator((pid, new VertexPartition(
+            vidToIndex, vertexArray, vidToIndex.getBitSet, srcEdgePositions)(vdManifest)))
         }.cache()
     }
   }

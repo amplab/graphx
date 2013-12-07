@@ -1,9 +1,12 @@
 package org.apache.spark.graph
 
+import scala.util.Random
+
 import org.scalatest.FunSuite
 
 import org.apache.spark.SparkContext
 import org.apache.spark.graph.LocalSparkContext._
+import org.apache.spark.graph.impl.EdgePartitionBuilder
 import org.apache.spark.rdd._
 
 class GraphSuite extends FunSuite with LocalSparkContext {
@@ -103,7 +106,8 @@ class GraphSuite extends FunSuite with LocalSparkContext {
 
   test("collectNeighborIds") {
     withSpark(new SparkContext("local", "test")) { sc =>
-      val chain = (0 until 100).map(x => (x, (x+1)%100) )
+      val n = 100
+      val chain = (0 until n).map(x => (x, (x+1)%n) )
       val rawEdges = sc.parallelize(chain, 3).map { case (s,d) => (s.toLong, d.toLong) }
       val graph = Graph.fromEdgeTuples(rawEdges, 1.0)
       val nbrs = graph.collectNeighborIds(EdgeDirection.Both)
@@ -112,8 +116,8 @@ class GraphSuite extends FunSuite with LocalSparkContext {
       nbrs.collect.foreach { case (vid, nbrs) => assert(nbrs.size === 2) }
       nbrs.collect.foreach { case (vid, nbrs) =>
         val s = nbrs.toSet
-        assert(s.contains((vid + 1) % 100))
-        assert(s.contains(if (vid > 0) vid - 1 else 99 ))
+        assert(s.contains((vid + 1) % n))
+        assert(s.contains(if (vid > 0) vid - 1 else n - 1 ))
       }
     }
   }
@@ -132,7 +136,6 @@ class GraphSuite extends FunSuite with LocalSparkContext {
       assert(d.count === e.count)
       assert(b.zipJoin(c)((id, b, c) => b + c).map(x => x._2).reduce(_+_) === 0)
       val f = b.mapValues(x => if (x % 2 == 0) -x else x)
-      assert(b.diff(f).collect().toSet === (2 to n by 2).map(x => (x.toLong, x.toLong)).toSet)
     }
   }
 
@@ -180,5 +183,20 @@ class GraphSuite extends FunSuite with LocalSparkContext {
         (a: Set[String], b: Set[String]) => a ++ b)
       assert(sums.collect().toSet === Set((0, Set("v1", "v2"))))
     }
+  }
+
+  test("EdgePartition.sort") {
+    val sortedEdges = List(Edge(0, 1, 0), Edge(1, 0, 0), Edge(1, 2, 0))
+    val builder = new EdgePartitionBuilder[Int]
+    for (e <- Random.shuffle(sortedEdges)) {
+      builder.add(e.srcId, e.dstId, e.attr)
+    }
+
+    val edgePartition = builder.toEdgePartition
+    assert(!edgePartition.sorted)
+
+    val edgePartitionSorted = edgePartition.sort()
+    assert(edgePartitionSorted.sorted)
+    assert(edgePartitionSorted.iterator.map(_.copy()).toList === sortedEdges)
   }
 }
