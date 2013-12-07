@@ -18,9 +18,10 @@
 package org.apache.spark.scheduler
 
 import java.io._
+import java.nio.ByteBuffer
 import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 
-import scala.collection.mutable.HashMap
+import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import org.apache.spark._
 import org.apache.spark.executor.ShuffleWriteMetrics
@@ -166,7 +167,8 @@ private[spark] class ShuffleMapTask(
       var totalBytes = 0L
       var totalTime = 0L
       val compressedSizes: Array[Byte] = shuffle.writers.map { writer: BlockObjectWriter =>
-        writer.commit()
+        val bytes = writer.commit()
+        blockManager.putBytes(writer.blockId, ByteBuffer.wrap(bytes), StorageLevel.MEMORY_ONLY, tellMaster = false)
         writer.close()
         val size = writer.fileSegment().length
         totalBytes += size
@@ -183,6 +185,7 @@ private[spark] class ShuffleMapTask(
       success = true
       new MapStatus(blockManager.blockManagerId, compressedSizes)
     } catch { case e: Exception =>
+      e.printStackTrace()
       // If there is an exception from running the task, revert the partial writes
       // and throw the exception upstream to Spark.
       if (shuffle != null && shuffle.writers != null) {

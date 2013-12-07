@@ -258,7 +258,7 @@ private[spark] class BlockManager(
    * never deletes (recent) items.
    */
   def getLocalFromDisk(blockId: BlockId, serializer: Serializer): Option[Iterator[Any]] = {
-    diskStore.getValues(blockId, serializer).orElse(
+    memoryStore.getValues(blockId).orElse(
       sys.error("Block " + blockId + " not found on disk, though it should be"))
   }
 
@@ -278,7 +278,7 @@ private[spark] class BlockManager(
     // As an optimization for map output fetches, if the block is for a shuffle, return it
     // without acquiring a lock; the disk store never deletes (recent) items so this should work
     if (blockId.isShuffle) {
-      return diskStore.getBytes(blockId) match {
+      return memoryStore.getBytes(blockId) match {
         case Some(bytes) =>
           Some(bytes)
         case None =>
