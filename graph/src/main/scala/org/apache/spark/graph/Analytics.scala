@@ -150,6 +150,14 @@ object Analytics extends Logging {
 
            logWarning("TIMEX Compute time: %.1f".format(
              (System.currentTimeMillis - computeStart).toDouble / 1000.0))
+
+
+           import scala.sys.process._
+           "wget -r -k localhost:4040"!
+           val folder = "webui_cc_" + java.util.UUID.randomUUID.toString
+           val mvCmd = "mv localhost:4040 " + folder
+           mvCmd!
+
            sc.stop()
          }
 
