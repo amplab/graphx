@@ -210,9 +210,10 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
 
       // Iterate over the active vertices
       val et = new EdgeTriplet[VD, ED](vertexPartition)
-      val activeFraction = vertexPartition.size / vertexPartition.capacity.toFloat
+      val activeFraction = vertexPartition.size / vertexPartition.index.size.toFloat
       val mapOutputs =
         if (activeFraction < 0.5) {
+          // println("Using vertex walking; activeFraction=%f".format(activeFraction))
           vertexPartition.edgePositionIterator.flatMap {
             case (srcVid, srcAttr, srcEdgePosition) =>
               // println("Looking at vertex %d --> index %d".format(srcVid, srcEdgePosition))
@@ -229,6 +230,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
               }
           }
         } else {
+          // println("Using edge walking; activeFraction=%f".format(activeFraction))
           edgePartition.iterator.flatMap { e =>
             et.set(e)
             if (mapUsesSrcAttr) {
