@@ -168,6 +168,9 @@ object PageRank extends Logging {
 
     var i = 0
     val weight = (1.0 - resetProb)
+    var oldRanks: VertexRDD[Double] = null
+    var twoDeltaGraphAgo: Graph[Double, Double] = null
+    var oldDeltaGraph: Graph[Double, Double] = null
     while (numDeltas > 0) {
       // Compute new deltas
       val deltas = deltaGraph
@@ -179,16 +182,29 @@ object PageRank extends Logging {
           _ + _)
         .filter { case (vid, delta) => delta > tol }
         .cache()
+      deltaGraph.vertices.cache()
       numDeltas = deltas.count()
+      if (oldDeltaGraph != null) {
+        oldDeltaGraph.asInstanceOf[impl.GraphImpl[Double, Double]].vTableReplicated.unpersist()
+      }
+      if (twoDeltaGraphAgo != null) {
+        // twoDeltaGraphAgo.vertices.unpersist(blocking=false)
+      }
       logWarning("Standalone PageRank: iter %d has %d deltas".format(i, numDeltas))
 
       // Apply deltas. Sets the mask for each vertex to false if it does not appear in deltas.
+      twoDeltaGraphAgo = oldDeltaGraph
+      oldDeltaGraph = deltaGraph
       deltaGraph = deltaGraph.deltaJoinVertices(deltas).cache()
 
       // Update ranks
+      oldRanks = ranks
       ranks = ranks.leftZipJoin(deltas) { (vid, oldRank, deltaOpt) =>
         oldRank + deltaOpt.getOrElse(0.0)
-      }
+      }.cache()
+      ranks.foreach(x => {})
+      oldRanks.unpersist(blocking=false)
+      deltas.unpersist(blocking=false)
 
       i += 1
     }
