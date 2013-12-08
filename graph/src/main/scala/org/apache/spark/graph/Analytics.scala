@@ -14,6 +14,20 @@ import org.apache.spark.graph.algorithms._
  */
 object Analytics extends Logging {
 
+  def saveWebUI() {
+    try {
+      import scala.sys.process._
+      "wget -r -k localhost:4040"!
+      val folder = "webui_pr_" + java.util.UUID.randomUUID.toString
+      val mvCmd = "mv localhost:4040 " + folder
+      mvCmd!
+    } catch {
+      case _ =>
+        logError("Couldn't save web UI; sleeping instead")
+        Thread.sleep(1000000)
+    }
+  }
+
   def main(args: Array[String]) = {
     val host = args(0)
     val taskType = args(1)
@@ -106,7 +120,7 @@ object Analytics extends Logging {
          }
          println("GRAPHX: Runtime: " + ((System.currentTimeMillis - startTime)/1000.0) + " seconds")
 
-         Thread.sleep(100000)
+         saveWebUI()
 
          sc.stop()
        }
@@ -152,11 +166,7 @@ object Analytics extends Logging {
              (System.currentTimeMillis - computeStart).toDouble / 1000.0))
 
 
-           import scala.sys.process._
-           "wget -r -k localhost:4040"!
-           val folder = "webui_cc_" + java.util.UUID.randomUUID.toString
-           val mvCmd = "mv localhost:4040 " + folder
-           mvCmd!
+           saveWebUI()
 
            sc.stop()
          }
