@@ -1,5 +1,6 @@
 package org.apache.spark.graph.impl
 
+import org.apache.spark.Logging
 import org.apache.spark.{HashPartitioner, Partitioner}
 import org.apache.spark.SparkContext._
 import org.apache.spark.graph._
@@ -32,7 +33,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
     @transient val edges: EdgeRDD[ED],
     @transient val vertexPlacement: VertexPlacement,
     @transient val vTableReplicated: VTableReplicated[VD])
-  extends Graph[VD, ED] {
+  extends Graph[VD, ED] with Logging {
 
   def this(
       vertices: VertexRDD[VD],
@@ -214,7 +215,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
       val activeFraction = vertexPartition.size / vertexPartition.index.size.toFloat
       val mapOutputs =
         if (activeFraction < 0.5) {
-          // println("Using vertex walking; activeFraction=%f".format(activeFraction))
+          logWarning("Using vertex walking; activeFraction=%f".format(activeFraction))
           vertexPartition.edgePositionIterator.flatMap { triple =>
             val srcVid = triple._1
             val srcAttr = triple._2
@@ -233,7 +234,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
             }
           }
         } else {
-          // println("Using edge walking; activeFraction=%f".format(activeFraction))
+          logWarning("Using edge walking; activeFraction=%f".format(activeFraction))
           edgePartition.iterator.flatMap { e =>
             et.set(e)
             if (mapUsesSrcAttr) {
