@@ -177,7 +177,7 @@ object PageRank extends Logging {
             else Iterator.empty
           },
           _ + _)
-        // .filter { case (vid, delta) => delta > tol }
+        .filter { case (vid, delta) => delta > tol }
         .cache()
       numDeltas = deltas.count()
       logInfo("Standalone PageRank: iter %d has %d deltas".format(i, numDeltas))
