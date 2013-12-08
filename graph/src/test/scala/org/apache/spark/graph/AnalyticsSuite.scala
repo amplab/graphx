@@ -35,10 +35,17 @@ object GridPageRank {
     for (iter <- 0 until nIter) {
       val oldPr = pr
       pr = new Array[Double](nRows * nCols)
+      println("=== iter %d in reference".format(iter))
+      println("ranks:")
       for (ind <- 0 until (nRows * nCols)) {
         pr(ind) = resetProb + (1.0 - resetProb) *
           inNbrs(ind).map( nbr => oldPr(nbr) / outDegree(nbr)).sum
+        println("(%d, %f)".format(ind, pr(ind)))
       }
+      // println("deltas:")
+      // for (ind <- 0 until (nRows * nCols)) {
+      //   println("(%d, %f)".format(ind, inNbrs(ind).map( nbr => (pr(nbr) - oldPr(nbr)) / outDegree(nbr)).sum))
+      // }
     }
     (0L until (nRows * nCols)).zip(pr)
   }
@@ -87,36 +94,36 @@ class AnalyticsSuite extends FunSuite with LocalSparkContext {
 
   test("Grid PageRank") {
     withSpark(new SparkContext("local", "test")) { sc =>
-      val rows = 4
-      val cols = 4
+      val rows = 2
+      val cols = 2
       val resetProb = 0.15
       val tol = 0.0001
-      val numIter = 50
+      val numIter = 10
 
       val gridGraph = GraphGenerators.gridGraph(sc, rows, cols).cache()
-      val staticRanks = PageRank.run(gridGraph, numIter, resetProb).vertices.cache()
-      val dynamicRanks = PageRank.runUntillConvergence(gridGraph, tol, resetProb).vertices.cache()
-      //val standaloneRanks = PageRank.runStandalone(gridGraph, tol, resetProb).cache()
-      val error1 = staticRanks.zipJoin(dynamicRanks) { case (id, a, b) => (a - b) * (a - b) }
-        .map { case (id, error) => error }.sum
-      //val error2 = dynamicRanks.zipJoin(standaloneRanks) { case (id, a, b) => (a - b) * (a - b) }
-      //  .map { case (id, error) => error }.sum
-      println("Error between static and dynamic: %f".format(error1))
-      //println("Error between dynamic and standalone: %f".format(error2))
-      //staticRanks.leftJoin(standaloneRanks) { (id, a, b) => (a, b) }.foreach( println(_) )
-      assert(error1 < 1.0e-5)
-      //assert(error2 < 1.0e-5)
+      // val staticRanks = PageRank.run(gridGraph, numIter, resetProb).vertices.cache()
+      // val dynamicRanks = PageRank.runUntillConvergence(gridGraph, tol, resetProb).vertices.cache()
+      val standaloneRanks = PageRank.runStandalone(gridGraph, tol, resetProb).cache()
+      // val error1 = staticRanks.zipJoin(dynamicRanks) { case (id, a, b) => (a - b) * (a - b) }
+      //   .map { case (id, error) => error }.sum
+      // val error2 = dynamicRanks.zipJoin(standaloneRanks) { case (id, a, b) => (a - b) * (a - b) }
+      //   .map { case (id, error) => error }.sum
+      // println("Error between static and dynamic: %f".format(error1))
+      // println("Error between dynamic and standalone: %f".format(error2))
+      // staticRanks.leftJoin(standaloneRanks) { (id, a, b) => (a, b) }.foreach( println(_) )
 
       val referenceRanks = sc.parallelize(GridPageRank(rows, cols, numIter, resetProb))
-      val error3 = staticRanks.leftJoin(referenceRanks) { (id, a, bOpt) =>
+      val error3 = standaloneRanks.leftJoin(referenceRanks) { (id, a, bOpt) =>
         val b: Double  = bOpt.get
         (a - b) * (a - b)
       }.map { case (id, error) => error }.sum
-      println("Error between static and reference: %f".format(error3))
+      println("Error between standalone and reference: %f".format(error3))
+
+      // assert(error1 < 1.0e-5)
+      // assert(error2 < 1.0e-5)
       assert(error3 < 1.0e-5)
     }
   } // end of Grid PageRank
-
 
   test("Grid Connected Components") {
     withSpark(new SparkContext("local", "test")) { sc =>
