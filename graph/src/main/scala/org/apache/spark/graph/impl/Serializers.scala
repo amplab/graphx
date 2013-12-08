@@ -147,7 +147,7 @@ class DoubleAggMsgSerializer extends Serializer {
     override def serializeStream(s: OutputStream) = new ShuffleSerializationStream(s) {
       def writeObject[T](t: T) = {
         val msg = t.asInstanceOf[(Vid, Double)]
-        writeVarLong(msg._1, optimizePositive = false)
+        writeVarLong(msg._1, optimizePositive = true)
         writeDouble(msg._2)
         this
       }
@@ -155,7 +155,7 @@ class DoubleAggMsgSerializer extends Serializer {
 
     override def deserializeStream(s: InputStream) = new ShuffleDeserializationStream(s) {
       def readObject[T](): T = {
-        val a = readVarLong(optimizePositive = false)
+        val a = readVarLong(optimizePositive = true)
         val b = readDouble()
         (a, b).asInstanceOf[T]
       }
