@@ -186,10 +186,9 @@ object PageRank extends Logging {
       deltaGraph.vertices.cache()
       numDeltas = deltas.count()
       if (oldDeltaGraph != null) {
-        // oldDeltaGraph.asInstanceOf[impl.GraphImpl[Double, Double]].vTableReplicated.unpersist()
       }
       if (twoDeltaGraphAgo != null) {
-        // twoDeltaGraphAgo.vertices.unpersist(blocking=false)
+        twoDeltaGraphAgo.asInstanceOf[impl.GraphImpl[Double, Double]].vTableReplicated.unpersist()
       }
       logWarning("Standalone PageRank: iter %d has %d deltas".format(i, numDeltas))
 
@@ -204,8 +203,8 @@ object PageRank extends Logging {
         oldRank + deltaOpt.getOrElse(0.0)
       }.cache()
       ranks.foreach(x => {})
-      oldRanks.unpersist(blocking=false)
-      deltas.unpersist(blocking=false)
+      // oldRanks.unpersist(blocking=false)
+      // deltas.unpersist(blocking=false)
 
       // Remove shuffle blocks
       ranks.context.parallelize(1 to 16, 16).foreach { i =>
