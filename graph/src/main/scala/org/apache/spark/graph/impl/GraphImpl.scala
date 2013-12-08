@@ -47,7 +47,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
     val vdManifest = classManifest[VD]
     val edManifest = classManifest[ED]
 
-    edges.zipEdgePartitions(vTableReplicated.bothAttrs) { (edgePartition, vTableReplicatedIter) =>
+    edges.zipEdgePartitions(vTableReplicated.srcAttrOnly) { (edgePartition, vTableReplicatedIter) =>
       val (_, vPart) = vTableReplicatedIter.next()
       new EdgeTripletIterator(vPart.index, vPart.values, edgePartition)(vdManifest, edManifest)
     }
@@ -213,8 +213,9 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
       // Iterate over the active vertices
       val et = new EdgeTriplet[VD, ED](vertexPartition)
       val activeFraction = vertexPartition.size / vertexPartition.index.size.toFloat
+      //val activeFraction = 0.1
       val mapOutputs =
-        if (activeFraction < 0.5) {
+        if (activeFraction < 0.9) {
           println("Using vertex walking; activeFraction=%f".format(activeFraction))
           vertexPartition.edgePositionIterator.flatMap { triple =>
             val srcVid = triple._1
@@ -223,26 +224,30 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
             // println("Looking at vertex %d --> index %d".format(srcVid, srcEdgePosition))
             edgePartition.srcEdgeIterator(srcVid, srcEdgePosition).flatMap { e =>
               et.set(e)
+              if (et.srcMask) {
               // println("  Edge (%d, %d) -> %s".format(e.srcId, e.dstId, e.attr))
-              if (mapUsesSrcAttr) {
-                et.srcAttr = vertexPartition(e.srcId)
+              //if (mapUsesSrcAttr) {
+                et.srcAttr = srcAttr //vertexPartition(e.srcId)
+              //}
+              //if (mapUsesDstAttr) {
+              //  et.dstAttr = vertexPartition(e.dstId)
+              //}
+                mapFunc(et)
+              } else {
+                Iterator.empty
               }
-              if (mapUsesDstAttr) {
-                et.dstAttr = vertexPartition(e.dstId)
-              }
-              mapFunc(et)
             }
           }
         } else {
           println("Using edge walking; activeFraction=%f".format(activeFraction))
           edgePartition.iterator.flatMap { e =>
             et.set(e)
-            if (mapUsesSrcAttr) {
+            //if (mapUsesSrcAttr) {
               et.srcAttr = vertexPartition(e.srcId)
-            }
-            if (mapUsesDstAttr) {
-              et.dstAttr = vertexPartition(e.dstId)
-            }
+            //}
+            //if (mapUsesDstAttr) {
+            //  et.dstAttr = vertexPartition(e.dstId)
+            //}
             mapFunc(et)
           }
         }

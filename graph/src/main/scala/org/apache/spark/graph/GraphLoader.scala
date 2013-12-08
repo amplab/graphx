@@ -78,7 +78,7 @@ object GraphLoader {
       partitionStrategy: PartitionStrategy = RandomVertexCut):
     Graph[Int, Int] = {
     // Parse the edge data table
-    val edges = sc.textFile(path, minEdgePartitions * 6).coalesce(minEdgePartitions).mapPartitions( iter =>
+    val edges = sc.textFile(path, minEdgePartitions).coalesce(minEdgePartitions).mapPartitions( iter =>
       iter.filter(line => !line.isEmpty && line(0) != '#').map { line =>
         val lineArray = line.split("\\s+")
         if(lineArray.length < 2) {

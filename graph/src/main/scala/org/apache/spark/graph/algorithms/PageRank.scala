@@ -172,7 +172,7 @@ object PageRank extends Logging {
     var oldRanks: VertexRDD[Double] = null
     var twoDeltaGraphAgo: Graph[Double, Double] = null
     var oldDeltaGraph: Graph[Double, Double] = null
-    while (numDeltas > 0) {
+    while (numDeltas > 0 && i < 20) {
       // Compute new deltas
       val deltas = deltaGraph
         .mapReduceTriplets[Double](
