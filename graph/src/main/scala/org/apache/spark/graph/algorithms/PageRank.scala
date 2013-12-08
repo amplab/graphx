@@ -186,7 +186,7 @@ object PageRank extends Logging {
       deltaGraph.vertices.cache()
       numDeltas = deltas.count()
       if (oldDeltaGraph != null) {
-        oldDeltaGraph.asInstanceOf[impl.GraphImpl[Double, Double]].vTableReplicated.unpersist()
+        // oldDeltaGraph.asInstanceOf[impl.GraphImpl[Double, Double]].vTableReplicated.unpersist()
       }
       if (twoDeltaGraphAgo != null) {
         // twoDeltaGraphAgo.vertices.unpersist(blocking=false)
