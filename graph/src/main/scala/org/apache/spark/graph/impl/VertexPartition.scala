@@ -74,14 +74,7 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
    * VertexPartition retains the same index.
    */
   def map[VD2: ClassManifest](f: (Vid, VD) => VD2): VertexPartition[VD2] = {
-    // Construct a view of the map transformation
-    val newValues = new Array[VD2](capacity)
-    var i = mask.nextSetBit(0)
-    while (i >= 0) {
-      newValues(i) = f(index.getValue(i), values(i))
-      i = mask.nextSetBit(i + 1)
-    }
-    new VertexPartition[VD2](index, newValues, mask, srcEdgePositions)
+    VertexPartition(iterator.map { case (vid, attr) => (vid, f(vid, attr)) })
   }
 
   /**
@@ -94,27 +87,16 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
    *       modifies the bitmap index and so no new values are allocated.
    */
   def filter(pred: (Vid, VD) => Boolean): VertexPartition[VD] = {
-    // Allocate the array to store the results into
-    val newMask = new BitSet(capacity)
-    // Iterate over the active bits in the old mask and evaluate the predicate
-    var i = mask.nextSetBit(0)
-    while (i >= 0) {
-      if (pred(index.getValue(i), values(i))) {
-        newMask.set(i)
-      }
-      i = mask.nextSetBit(i + 1)
-    }
-    new VertexPartition(index, values, newMask, srcEdgePositions)
+    VertexPartition(iterator.filter { case (vid, attr) => pred(vid, attr) })
   }
 
   /** Inner join another VertexPartition. */
-  def join[VD2: ClassManifest, VD3: ClassManifest]
+  def fastJoin[VD2: ClassManifest, VD3: ClassManifest]
       (other: VertexPartition[VD2])
       (f: (Vid, VD, VD2) => VD3): VertexPartition[VD3] =
   {
     if (index != other.index) {
-      logWarning("Joining two VertexPartitions with different indexes is slow.")
-      join(createUsingIndex(other.iterator))(f)
+      throw new Exception("Can't quickly join two VertexPartitions with different indexes.")
     } else {
       val newValues = new Array[VD3](capacity)
       val newMask = mask & other.mask
@@ -129,13 +111,20 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
   }
 
   /** Inner join another VertexPartition. */
-  def deltaJoin[VD2: ClassManifest, VD3: ClassManifest]
+  def join[VD2: ClassManifest, VD3: ClassManifest]
+      (other: VertexPartition[VD2])
+      (f: (Vid, VD, VD2) => VD3): VertexPartition[VD3] =
+  {
+    fastJoin(createUsingIndex(other.iterator))(f)
+  }
+
+  /** Inner join another VertexPartition. */
+  def fastDeltaJoin[VD2: ClassManifest, VD3: ClassManifest]
       (other: VertexPartition[VD2])
       (f: (Vid, VD, VD2) => VD3): VertexPartition[VD3] =
   {
     if (index != other.index) {
-      logWarning("Joining two VertexPartitions with different indexes is slow.")
-      join(createUsingIndex(other.iterator))(f)
+      throw new Exception("Can't quickly join two VertexPartitions with different indexes.")
     } else {
       val newValues = new Array[VD3](capacity)
       val newMask = mask & other.mask
@@ -152,13 +141,20 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
     }
   }
 
+  /** Inner join another VertexPartition. */
+  def deltaJoin[VD2: ClassManifest, VD3: ClassManifest]
+      (other: VertexPartition[VD2])
+      (f: (Vid, VD, VD2) => VD3): VertexPartition[VD3] =
+  {
+    fastDeltaJoin(createUsingIndex(other.iterator))(f)
+  }
+
   /** Left outer join another VertexPartition. */
-  def leftJoin[VD2: ClassManifest, VD3: ClassManifest]
+  def fastLeftJoin[VD2: ClassManifest, VD3: ClassManifest]
       (other: VertexPartition[VD2])
       (f: (Vid, VD, Option[VD2]) => VD3): VertexPartition[VD3] = {
     if (index != other.index) {
-      logWarning("Joining two VertexPartitions with different indexes is slow.")
-      leftJoin(createUsingIndex(other.iterator))(f)
+      throw new Exception("Can't quickly join two VertexPartitions with different indexes.")
     } else {
       val newValues = new Array[VD3](capacity)
 
@@ -172,24 +168,33 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
     }
   }
 
+  /** Left outer join another VertexPartition. */
+  def leftJoin[VD2: ClassManifest, VD3: ClassManifest]
+      (other: VertexPartition[VD2])
+      (f: (Vid, VD, Option[VD2]) => VD3): VertexPartition[VD3] = {
+    fastLeftJoin(createUsingIndex(other.iterator))(f)
+  }
+
   /** Left outer join another iterator of messages. */
   def leftJoin[VD2: ClassManifest, VD3: ClassManifest]
       (other: Iterator[(Vid, VD2)])
       (f: (Vid, VD, Option[VD2]) => VD3): VertexPartition[VD3] = {
-    leftJoin(createUsingIndex(other))(f)
+    fastLeftJoin(createUsingIndex(other))(f)
   }
 
   /**
    * Similar effect as aggregateUsingIndex((a, b) => a)
    */
-  def createUsingIndex[VD2: ClassManifest](iter: Iterator[Product2[Vid, VD2]])
+  private def createUsingIndex[VD2: ClassManifest](iter: Iterator[Product2[Vid, VD2]])
     : VertexPartition[VD2] = {
     val newMask = new BitSet(capacity)
     val newValues = new Array[VD2](capacity)
     iter.foreach { case (vid, vdata) =>
       val pos = index.getPos(vid)
-      newMask.set(pos)
-      newValues(pos) = vdata
+      if (pos != -1) {
+        newMask.set(pos)
+        newValues(pos) = vdata
+      }
     }
     new VertexPartition[VD2](index, newValues, newMask, srcEdgePositions)
   }
@@ -208,42 +213,29 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
    * }}}
    */
   def update(other: VertexPartition[VD]): VertexPartition[VD] = {
-    assert (index == other.index)
-    val newValues = new Array[VD](capacity)
-    System.arraycopy(values, 0, newValues, 0, values.length)
-
-    val updateMask = other.mask
-    val updateValues = other.values
-    var i = updateMask.nextSetBit(0)
-    while (i >= 0) {
-      newValues(i) = updateValues(i)
-      i = updateMask.nextSetBit(i + 1)
+    this.leftJoin(other) { (vid, oldAttr, newAttrOpt) =>
+      newAttrOpt match {
+        case Some(newAttr) => newAttr
+        case None => oldAttr
+      }
     }
-    new VertexPartition(index, newValues, mask, srcEdgePositions)
   }
 
-  def updateUsingIndex[VD2: ClassManifest](iter: Iterator[Product2[Vid, VD2]])
-    : VertexPartition[VD2] = {
-    val newMask = new BitSet(capacity)
-    val newValues = new Array[VD2](capacity)
-    System.arraycopy(values, 0, newValues, 0, newValues.length)
-    iter.foreach { case (vid, vdata) =>
-      val pos = index.getPos(vid)
-      newMask.set(pos)
-      newValues(pos) = vdata
-    }
-    new VertexPartition[VD2](index, newValues, newMask, srcEdgePositions)
+  def updateUsingIndex(iter: Iterator[(Vid, VD)])
+    : VertexPartition[VD] = {
+    update(VertexPartition(iter))
   }
 
   def aggregateUsingIndex[VD2: ClassManifest](
       iter: Iterator[Product2[Vid, VD2]], reduceFunc: (VD2, VD2) => VD2): VertexPartition[VD2] =
   {
-    val newMask = new BitSet(capacity)
-    val newValues = new Array[VD2](capacity)
+    val newThis = VertexPartition(this.iterator)
+    val newMask = new BitSet(newThis.capacity)
+    val newValues = new Array[VD2](newThis.capacity)
     iter.foreach { product =>
       val vid = product._1
       val vdata = product._2
-      val pos = index.getPos(vid)
+      val pos = newThis.index.getPos(vid)
       if (newMask.get(pos)) {
         newValues(pos) = reduceFunc(newValues(pos), vdata)
       } else { // otherwise just store the new value
@@ -251,7 +243,7 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
         newValues(pos) = vdata
       }
     }
-    new VertexPartition[VD2](index, newValues, newMask, srcEdgePositions)
+    new VertexPartition[VD2](newThis.index, newValues, newMask, newThis.srcEdgePositions)
   }
 
   /**

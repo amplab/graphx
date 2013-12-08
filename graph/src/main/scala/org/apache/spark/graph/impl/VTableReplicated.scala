@@ -69,7 +69,7 @@ class VTableReplicated[VD: ClassManifest](
 
         prev.zipPartitions(msgsByPartition) { (vTableIter, msgsIter) =>
           val (pid, vertexPartition) = vTableIter.next()
-          val newVPart = vertexPartition.updateUsingIndex(msgsIter.flatMap(_._2.iterator))(vdManifest)
+          val newVPart = vertexPartition.updateUsingIndex(msgsIter.flatMap(_._2.iterator))
           Iterator((pid, newVPart))
         }.cache().setName("VTableReplicated delta %s %s".format(includeSrcAttr, includeDstAttr))
 
