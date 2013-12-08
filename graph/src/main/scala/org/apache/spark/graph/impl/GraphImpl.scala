@@ -215,7 +215,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
       val activeFraction = vertexPartition.size / vertexPartition.index.size.toFloat
       val mapOutputs =
         if (activeFraction < 0.5) {
-          logWarning("Using vertex walking; activeFraction=%f".format(activeFraction))
+          println("Using vertex walking; activeFraction=%f".format(activeFraction))
           vertexPartition.edgePositionIterator.flatMap { triple =>
             val srcVid = triple._1
             val srcAttr = triple._2
@@ -234,7 +234,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
             }
           }
         } else {
-          logWarning("Using edge walking; activeFraction=%f".format(activeFraction))
+          println("Using edge walking; activeFraction=%f".format(activeFraction))
           edgePartition.iterator.flatMap { e =>
             et.set(e)
             if (mapUsesSrcAttr) {
