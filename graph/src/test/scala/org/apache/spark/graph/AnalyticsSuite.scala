@@ -126,6 +126,34 @@ class AnalyticsSuite extends FunSuite with LocalSparkContext {
   } // end of Grid PageRank
 
 
+  test("Chain PageRank") {
+    withSpark(new SparkContext("local", "test")) { sc =>
+      val chain1 = (0 until 9).map(x => (x, x+1) )
+      val rawEdges = sc.parallelize(chain1, 1).map { case (s,d) => (s.toLong, d.toLong) }
+      val chain = Graph.fromEdgeTuples(rawEdges, 1.0).cache()
+      val resetProb = 0.15
+      val tol = 0.0001
+      val numIter = 10
+
+      val staticRanks = PageRank.run(chain, numIter, resetProb).vertices.cache()
+      val dynamicRanks = PageRank.runUntillConvergence(chain, tol, resetProb).vertices.cache()
+      val standaloneRanks = PageRank.runStandalone(chain, tol, resetProb).cache()
+      val error1 = staticRanks.zipJoin(dynamicRanks) { case (id, a, b) => (a - b) * (a - b) }
+        .map { case (id, error) => error }.sum
+      val error2 = dynamicRanks.zipJoin(standaloneRanks) { case (id, a, b) => (a - b) * (a - b) }
+        .map { case (id, error) => error }.sum
+      println("Error between static and dynamic: %f".format(error1))
+      println("Error between dynamic and standalone: %f".format(error2))
+      staticRanks.leftJoin(standaloneRanks) { (id, a, b) => (a, b) }.foreach {
+        case (vid, (a, b)) => println("%d: %f vs %f".format(vid, a, b.getOrElse(0.0)))
+      }
+
+      assert(error1 < 1.0e-5)
+      assert(error2 < 1.0e-5)
+    }
+  }
+
+
   test("Grid Connected Components") {
     withSpark(new SparkContext("local", "test")) { sc =>
       val gridGraph = GraphGenerators.gridGraph(sc, 10, 10).cache()
