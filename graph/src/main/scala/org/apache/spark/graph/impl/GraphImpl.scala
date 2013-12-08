@@ -211,25 +211,40 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
 
       // Iterate over the active vertices
       val et = new EdgeTriplet[VD, ED](vertexPartition)
-      val mapOutputs = vertexPartition.edgePositionIterator.flatMap { triple =>
-        val srcVid = triple._1
-        val srcAttr = triple._2
-        val srcEdgePosition = triple._3
-        //case (srcVid, srcAttr, srcEdgePosition) =>
-          // println("Looking at vertex %d --> index %d".format(srcVid, srcEdgePosition))
-        edgePartition.srcEdgeIterator(srcVid, srcEdgePosition).flatMap { e =>
-          et.set(e)
-          // println("  Edge (%d, %d) -> %s".format(e.srcId, e.dstId, e.attr))
-          //if (mapUsesSrcAttr) {
-            //et.srcAttr = vertexPartition(e.srcId)
-            et.srcAttr = srcAttr
-          //}
-          //if (mapUsesDstAttr) {
-            et.dstAttr = vertexPartition(e.dstId)
-          //}
-          mapFunc(et)
+      val activeFraction = vertexPartition.size / vertexPartition.index.size.toFloat
+      val mapOutputs =
+        if (activeFraction < 0.5) {
+          // println("Using vertex walking; activeFraction=%f".format(activeFraction))
+          vertexPartition.edgePositionIterator.flatMap { triple =>
+            val srcVid = triple._1
+            val srcAttr = triple._2
+            val srcEdgePosition = triple._3
+            // println("Looking at vertex %d --> index %d".format(srcVid, srcEdgePosition))
+            edgePartition.srcEdgeIterator(srcVid, srcEdgePosition).flatMap { e =>
+              et.set(e)
+              // println("  Edge (%d, %d) -> %s".format(e.srcId, e.dstId, e.attr))
+              if (mapUsesSrcAttr) {
+                et.srcAttr = vertexPartition(e.srcId)
+              }
+              if (mapUsesDstAttr) {
+                et.dstAttr = vertexPartition(e.dstId)
+              }
+              mapFunc(et)
+            }
+          }
+        } else {
+          // println("Using edge walking; activeFraction=%f".format(activeFraction))
+          edgePartition.iterator.flatMap { e =>
+            et.set(e)
+            if (mapUsesSrcAttr) {
+              et.srcAttr = vertexPartition(e.srcId)
+            }
+            if (mapUsesDstAttr) {
+              et.dstAttr = vertexPartition(e.dstId)
+            }
+            mapFunc(et)
+          }
         }
-      }
       // Note: This doesn't allow users to send messages to arbitrary vertices.
       vertexPartition.aggregateUsingIndex(mapOutputs, reduceFunc).iterator
     }

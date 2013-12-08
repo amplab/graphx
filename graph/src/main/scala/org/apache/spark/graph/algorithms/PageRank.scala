@@ -180,7 +180,7 @@ object PageRank extends Logging {
         .filter { case (vid, delta) => delta > tol }
         .cache()
       numDeltas = deltas.count()
-      logInfo("Standalone PageRank: iter %d has %d deltas".format(i, numDeltas))
+      logWarning("Standalone PageRank: iter %d has %d deltas".format(i, numDeltas))
 
       // Apply deltas. Sets the mask for each vertex to false if it does not appear in deltas.
       deltaGraph = deltaGraph.deltaJoinVertices(deltas).cache()
