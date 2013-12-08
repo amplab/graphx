@@ -202,8 +202,8 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
 
     // For each vertex, replicate its attribute only to partitions where it is
     // in the relevant position in an edge.
-    val mapUsesSrcAttr = accessesVertexAttr[VD, ED](mapFunc, "srcAttr")
-    val mapUsesDstAttr = accessesVertexAttr[VD, ED](mapFunc, "dstAttr")
+    val mapUsesSrcAttr = true // accessesVertexAttr[VD, ED](mapFunc, "srcAttr")
+    val mapUsesDstAttr = true // accessesVertexAttr[VD, ED](mapFunc, "dstAttr")
     val vs = vTableReplicated.get(mapUsesSrcAttr, mapUsesDstAttr)
 
     // Map and combine.
