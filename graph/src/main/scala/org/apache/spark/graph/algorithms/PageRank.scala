@@ -1,6 +1,7 @@
 package org.apache.spark.graph.algorithms
 
 import org.apache.spark.Logging
+import org.apache.spark.SparkEnv
 import org.apache.spark.graph._
 
 
@@ -205,6 +206,11 @@ object PageRank extends Logging {
       ranks.foreach(x => {})
       oldRanks.unpersist(blocking=false)
       deltas.unpersist(blocking=false)
+
+      // Remove shuffle blocks
+      ranks.context.parallelize(1 to 16, 16).foreach { i =>
+        SparkEnv.get.blockManager.shuffleBlockManager.removeAllShuffleStuff()
+      }
 
       i += 1
     }
