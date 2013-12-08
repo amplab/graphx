@@ -156,15 +156,8 @@ object PageRank extends Logging {
   def runStandalone[VD: Manifest, ED: Manifest](
       graph: Graph[VD, ED], tol: Double, resetProb: Double = 0.15): VertexRDD[Double] = {
 
-    def printVerts(v: VertexRDD[Double]) {
-      v.foreach { case (vid, attr) => println("(%d, %f)".format(vid, attr)) }
-    }
-
     // Initialize the ranks
     var ranks: VertexRDD[Double] = graph.vertices.mapValues((vid, attr) => resetProb).cache()
-
-    println("[init] ranks:")
-    printVerts(ranks)
 
     // Initialize the delta graph where each vertex stores its delta and each edge knows its weight
     var deltaGraph: Graph[Double, Double] =
@@ -172,10 +165,6 @@ object PageRank extends Logging {
       .mapTriplets(e => 1.0 / e.srcAttr)
       .mapVertices((vid, degree) => resetProb).cache()
     var numDeltas: Long = ranks.count()
-
-    println("[init] deltas:")
-    printVerts(deltaGraph.vertices)
-
 
     var i = 0
     val weight = (1.0 - resetProb)
@@ -193,9 +182,6 @@ object PageRank extends Logging {
       numDeltas = deltas.count()
       logInfo("Standalone PageRank: iter %d has %d deltas".format(i, numDeltas))
 
-      println("[iter %d] deltas:".format(i))
-      printVerts(deltas)
-
       // Apply deltas. Sets the mask for each vertex to false if it does not appear in deltas.
       deltaGraph = deltaGraph.deltaJoinVertices(deltas).cache()
 
@@ -203,9 +189,6 @@ object PageRank extends Logging {
       ranks = ranks.leftZipJoin(deltas) { (vid, oldRank, deltaOpt) =>
         oldRank + deltaOpt.getOrElse(0.0)
       }
-
-      println("[iter %d] ranks:".format(i))
-      printVerts(ranks)
 
       i += 1
     }
