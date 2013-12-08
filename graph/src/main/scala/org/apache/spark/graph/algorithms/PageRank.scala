@@ -159,45 +159,36 @@ object PageRank extends Logging {
     // Initialize the ranks
     var ranks: VertexRDD[Double] = graph.vertices.mapValues((vid, attr) => resetProb).cache()
 
-    println("[pre] ranks:"); ranks.foreach { case (vid, rank) => println("(%d, %f)".format(vid, rank)) }
-
     // Initialize the delta graph where each vertex stores its delta and each edge knows its weight
     var deltaGraph: Graph[Double, Double] =
       graph.outerJoinVertices(graph.outDegrees)((vid, vdata, deg) => deg.getOrElse(0))
       .mapTriplets(e => 1.0 / e.srcAttr)
-      .mapVertices((vid, degree) => 0.0).cache()
+      .mapVertices((vid, degree) => resetProb).cache()
     var numDeltas: Long = ranks.count()
 
-    println("[pre] deltaGraph:"); deltaGraph.vertices.foreach { case (vid, delta) => println("(%d, %f)".format(vid, delta)) }
-
     var i = 0
+    val weight = (1.0 - resetProb)
     while (numDeltas > 0) {
       // Compute new deltas
       val deltas = deltaGraph
-        .outerJoinVertices(ranks)((vid, _, rank) => rank.get)
         .mapReduceTriplets[Double](
-          et => Iterator((et.dstId, et.srcAttr * et.attr)),
+          et => {
+            if (et.srcMask) Iterator((et.dstId, et.srcAttr * et.attr * weight))
+            else Iterator.empty
+          },
           _ + _)
+        // .filter { case (vid, delta) => delta > tol }
         .cache()
-      val numDeltasPreFilter = deltas.count()
-      val filteredDeltas = deltas.filter { case (vid, delta) => delta > tol }.cache()
-      numDeltas = filteredDeltas.count()
-      println("Standalone PageRank: iter %d has %d deltas (%d pre-filter)".format(
-        i, numDeltas, numDeltasPreFilter))
+      numDeltas = deltas.count()
+      logInfo("Standalone PageRank: iter %d has %d deltas".format(i, numDeltas))
 
-      println("[iter %d] filteredDeltas:".format(i)); filteredDeltas.foreach { case (vid, delta) => println("(%d, %f)".format(vid, delta)) }
-
-      // Apply deltas
-      deltaGraph = deltaGraph.deltaJoinVertices(filteredDeltas).cache()
-
-      println("[iter %d] deltaGraph:".format(i)); deltaGraph.vertices.foreach { case (vid, delta) => println("(%d, %f)".format(vid, delta)) }
+      // Apply deltas. Sets the mask for each vertex to false if it does not appear in deltas.
+      deltaGraph = deltaGraph.deltaJoinVertices(deltas).cache()
 
       // Update ranks
-      ranks = ranks.leftZipJoin(deltaGraph.vertices) { (vid, oldRank, deltaOpt) =>
-        oldRank + (1.0 - resetProb) * deltaOpt.getOrElse(0.0)
+      ranks = ranks.leftZipJoin(deltas) { (vid, oldRank, deltaOpt) =>
+        oldRank + deltaOpt.getOrElse(0.0)
       }
-
-      println("[iter %d] ranks:".format(i)); ranks.foreach { case (vid, rank) => println("(%d, %f)".format(vid, rank)) }
 
       i += 1
     }
