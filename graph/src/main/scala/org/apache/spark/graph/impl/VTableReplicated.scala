@@ -110,7 +110,7 @@ class VTableReplicated[VD: ClassManifest](
           // Populate the vertex array using the vidToIndex map
           val vertexArray = vdManifest.newArray(vidToIndex.capacity)
           for ((_, block) <- msgsIter) {
-            for (i <- 0 until block.vids.size) {
+            for (i <- 0 until block.rows.size) {
               val vid = block.vids(i)
               val attr = block.attrs(i)
               val ind = vidToIndex.getPos(vid)
@@ -164,6 +164,9 @@ object VTableReplicated {
   }
 }
 
-class VertexAttributeBlock[VD: ClassManifest](val vids: Array[Vid], val attrs: Array[VD]) {
-  def iterator: Iterator[(Vid, VD)] = (0 until vids.size).iterator.map { i => (vids(i), attrs(i)) }
+class VertexAttributeBlock[VD: ClassManifest](@transient _vids: Array[Vid], @transient _attrs: Array[VD]) {
+  val rows: Array[(Vid, VD)] = _vids.zip(_attrs)
+  def vids(i: Int): Vid = rows(i)._1
+  def attrs(i: Int): VD = rows(i)._2
+  def iterator: Iterator[(Vid, VD)] = rows.iterator
 }
