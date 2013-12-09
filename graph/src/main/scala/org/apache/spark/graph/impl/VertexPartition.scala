@@ -143,9 +143,6 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassManifest](
       var i = newMask.nextSetBit(0)
       while (i >= 0) {
         newValues(i) = f(index.getValue(i), values(i), other.values(i))
-        if (newValues(i) == values(i)) {
-          newMask.unset(i)
-        }
         i = mask.nextSetBit(i + 1)
       }
       new VertexPartition(index, newValues, newMask, srcEdgePositions)
