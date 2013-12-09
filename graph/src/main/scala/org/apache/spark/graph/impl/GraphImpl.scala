@@ -213,7 +213,7 @@ class GraphImpl[VD: ClassManifest, ED: ClassManifest] protected (
       val et = new EdgeTriplet[VD, ED](vertexPartition)
       val activeFraction = vertexPartition.size / vertexPartition.index.size.toFloat
       val mapOutputs =
-        if (activeFraction < 0.5) {
+        if (true) {
           println("Using vertex walking; activeFraction=%f".format(activeFraction))
           vertexPartition.edgePositionIterator.flatMap { triple =>
             val srcVid = triple._1
