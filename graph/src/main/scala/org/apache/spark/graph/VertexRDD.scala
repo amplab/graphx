@@ -93,6 +93,11 @@ class VertexRDD[@specialized VD: ClassManifest](
   /** Persist this RDD with the default storage level (`MEMORY_ONLY`). */
   override def persist(): VertexRDD[VD] = persist(StorageLevel.MEMORY_ONLY)
 
+  override def unpersist(blocking: Boolean = true): RDD[(Vid, VD)] = {
+    partitionsRDD.unpersist(blocking)
+    this
+  }
+
   /** Persist this RDD with the default storage level (`MEMORY_ONLY`). */
   override def cache(): VertexRDD[VD] = persist()
 

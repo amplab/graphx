@@ -37,6 +37,13 @@ class VTableReplicated[VD: ClassManifest](
     }
   }
 
+  def unpersist() {
+    bothAttrs.unpersist(false)
+    srcAttrOnly.unpersist(false)
+    dstAttrOnly.unpersist(false)
+    noAttrs.unpersist(false)
+  }
+
   private def createVTableReplicated(
        vTable: VertexRDD[VD],
        eTable: EdgeRDD[_],
@@ -50,7 +57,7 @@ class VTableReplicated[VD: ClassManifest](
     // Send each edge partition the vertex attributes it wants, as specified in
     // vertexPlacement
     val msgsByPartition = placement.zipPartitions(vTable.partitionsRDD)(VTableReplicated.buildBuffer(_, _)(vdManifest))
-      .partitionBy(eTable.partitioner.get).cache()
+      .partitionBy(eTable.partitioner.get)
     // TODO: Consider using a specialized shuffler.
 
     prevVTableReplicated match {
