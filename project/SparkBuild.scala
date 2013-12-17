@@ -51,7 +51,7 @@ object SparkBuild extends Build {
 
   lazy val bagel = Project("bagel", file("bagel"), settings = bagelSettings) dependsOn(core)
 
-  lazy val graph = Project("graph", file("graph"), settings = graphSettings) dependsOn(core) 
+  lazy val graph = Project("graph", file("graph"), settings = graphSettings) dependsOn(core)
 
   lazy val streaming = Project("streaming", file("streaming"), settings = streamingSettings) dependsOn(core)
 
@@ -272,7 +272,10 @@ object SparkBuild extends Build {
   ) ++ assemblySettings ++ extraAssemblySettings
 
   def graphSettings = sharedSettings ++ Seq(
-    name := "spark-graphx"
+    name := "spark-graphx",
+    libraryDependencies ++= Seq(
+      "com.twitter" %% "algebird-core" % "0.3.0"
+    )
   )
 
   def bagelSettings = sharedSettings ++ Seq(
