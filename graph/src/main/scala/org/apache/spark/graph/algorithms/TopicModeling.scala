@@ -5,6 +5,7 @@ import org.apache.spark.graph._
 import org.apache.spark.rdd.RDD
 import org.apache.spark._
 import org.apache.spark.broadcast._
+import org.apache.spark.util.BoundedPriorityQueue
 
 object LDA {
   type DocId = Vid
@@ -128,6 +129,27 @@ class LDA(@transient val tokens: RDD[(LDA.WordId, LDA.DocId)],
     val globalCounts: Factor = accum.value
     topicC = sc.broadcast(globalCounts.asCounts())
   } // end of update counts
+
+  def topWords(k: Int): Array[Array[(Count, WordId)]] = {
+    graph.vertices.filter {
+      case (vid, c) => vid >= 0
+    }.mapPartitions { items =>
+      val queues = Array.fill(nTopics)(new BoundedPriorityQueue[(Count, WordId)](k))
+      for ((wordId, factor) <- items) {
+        var t = 0
+        val counts: Array[Count] = factor.asCounts()
+        while (t < nTopics) {
+          val tpl: (Count, WordId) = (counts(t), wordId)
+          queues(t) += tpl
+          t += 1
+        }
+      }
+      Iterator(queues)
+    }.reduce { (q1, q2) =>
+      q1.zip(q2).foreach { case (a,b) => a ++= b }
+      q1
+    }.map ( q => q.toArray )
+  } // end of TopWords
 
   /**
    * Run the gibbs sampler
