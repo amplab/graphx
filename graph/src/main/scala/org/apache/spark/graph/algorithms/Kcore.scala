@@ -15,7 +15,6 @@ object Kcore extends Logging {
     // Graph[(Int, Boolean), ED] - boolean indicates whether it is active or not
     var g = graph.outerJoinVertices(graph.degrees)((vid, oldData, newData) => (newData.getOrElse(0), True))
 
-
     var curK = 1
     while (curK <= kmax) {
       g = computeCurrentKCore(g, curK)
@@ -23,7 +22,12 @@ object Kcore extends Logging {
       // that their vertex data indicates
       curK += 1
     }
+    
+    g.mapVertices({ case (k, _) => min(k, curK)})
+      .subgraph({x => true}, {(v, d) => d >= kmin})
+
   }
+
 
   // TODO(crankshaw) - optionally we can do some post-processing here:
   //  + removes all vertices that are members of a shell x s.t. x < kmin (simple subgraph) 
