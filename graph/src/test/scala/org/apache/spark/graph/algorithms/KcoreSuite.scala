@@ -31,8 +31,8 @@ class KcoreSuite extends FunSuite with LocalSparkContext {
     withSpark { sc =>
       val rawEdges = createKCoreEdges()
       val vertices = Set((11, 1), (12,1), (13,1), (14,1), (21,2), (22,2), (23,2), (31, 3), (32,3), (33,3), (34,3))
-      val graph = Graph.fromEdges(sc.parallelize(rawEdges))
-      val resultGraph = Kcore.run(graph, 1, 3)
+      val graph = Graph.fromEdges(sc.parallelize(rawEdges), "a")
+      val resultGraph = Kcore.run(graph, 1, 5)
       val resultVerts = resultGraph.vertices.collect.toSet
       assert(resultVerts === vertices)
 
