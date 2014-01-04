@@ -300,15 +300,17 @@ object TopicModeling {
       }
 
     val model = new LDA(rawTokens, nTopics, alpha, beta)
-    model.iterate(nIter)
 
-    val topWords = model.topWords(5)
-    for (queue <- topWords) {
-      println("word list: ")
-      if (!dictionary.isEmpty) {
-        queue.foreach(t => println("\t(" + t._1 + ", " + dictionary(t._2.toInt - 1) + ")"))
-      } else {
-        queue.foreach(t => println("\t" + t.toString))
+    for(iter <- 0 until nIter) {
+      model.iterate(1)
+      val topWords = model.topWords(5)
+      for (queue <- topWords) {
+        println("word list: ")
+        if (!dictionary.isEmpty) {
+          queue.foreach(t => println("\t(" + t._1 + ", " + dictionary(t._2.toInt - 1) + ")"))
+        } else {
+          queue.foreach(t => println("\t" + t.toString))
+        }
       }
     }
 
