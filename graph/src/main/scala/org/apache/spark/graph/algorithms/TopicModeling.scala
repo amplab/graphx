@@ -179,7 +179,6 @@ class LDA(@transient val tokens: RDD[(LDA.WordId, LDA.DocId)],
       assert(totalHist.sum == nTokens)
 
       internalIteration += 1
-      println("Sampled iteration: " + i.toString)
     }
   } // end of iterate
 
@@ -217,8 +216,8 @@ class LDA(@transient val tokens: RDD[(LDA.WordId, LDA.DocId)],
 
 object TopicModeling {
   def main(args: Array[String]) {
-    val host = "local" // args(0)
-    val options =  args.drop(3).map { arg =>
+    val host = args(0)
+    val options =  args.drop(1).map { arg =>
       arg.dropWhile(_ == '-').split('=') match {
         case Array(opt, v) => (opt -> v)
         case _ => throw new IllegalArgumentException("Invalid argument: " + arg)
@@ -256,6 +255,8 @@ object TopicModeling {
       case (opt, _) => throw new IllegalArgumentException("Invalid option: " + opt)
     }
 
+    println("Tokens:     " + tokensFile)
+    println("Dictionary: " + dictionaryFile)
 
     // def setLogLevels(level: org.apache.log4j.Level, loggers: TraversableOnce[String]) = {
     //   loggers.map{
@@ -312,6 +313,7 @@ object TopicModeling {
           queue.foreach(t => println("\t" + t.toString))
         }
       }
+      println("Sampled iteration: " + iter.toString)
     }
 
     sc.stop()
