@@ -22,9 +22,8 @@ class EdgeRDD[@specialized ED: ClassManifest](
   override val partitioner =
     partitionsRDD.partitioner.orElse(Some(Partitioner.defaultPartitioner(partitionsRDD)))
 
-  override def compute(split: Partition, context: TaskContext): Iterator[Edge[ED]] = {
-    val edgePartition = partitionsRDD.compute(split, context).next()._2
-    edgePartition.iterator
+  override def compute(part: Partition, context: TaskContext): Iterator[Edge[ED]] = {
+    firstParent[(Pid, EdgePartition[ED])].iterator(part, context).next._2.iterator
   }
 
   override def collect(): Array[Edge[ED]] = this.map(_.copy()).collect()
@@ -43,20 +42,42 @@ class EdgeRDD[@specialized ED: ClassManifest](
   /** Persist this RDD with the default storage level (`MEMORY_ONLY`). */
   override def cache(): EdgeRDD[ED] = persist()
 
-  def mapEdgePartitions[ED2: ClassManifest](f: EdgePartition[ED] => EdgePartition[ED2])
-    : EdgeRDD[ED2]= {
+  def mapEdgePartitions[ED2: ClassManifest](f: (Pid, EdgePartition[ED]) => EdgePartition[ED2])
+    : EdgeRDD[ED2] = {
+//       iter => iter.map { case (pid, ep) => (pid, f(ep)) }
     new EdgeRDD[ED2](partitionsRDD.mapPartitions({ iter =>
       val (pid, ep) = iter.next()
-      Iterator(Tuple2(pid, f(ep)))
+      Iterator(Tuple2(pid, f(pid, ep)))
     }, preservesPartitioning = true))
   }
 
   def zipEdgePartitions[T: ClassManifest, U: ClassManifest]
       (other: RDD[T])
-      (f: (EdgePartition[ED], Iterator[T]) => Iterator[U]): RDD[U] = {
+      (f: (Pid, EdgePartition[ED], Iterator[T]) => Iterator[U]): RDD[U] = {
     partitionsRDD.zipPartitions(other, preservesPartitioning = true) { (ePartIter, otherIter) =>
-      val (_, edgePartition) = ePartIter.next()
-      f(edgePartition, otherIter)
+      val (pid, edgePartition) = ePartIter.next()
+      f(pid, edgePartition, otherIter)
+    }
+  }
+
+  def zipEdgePartitions[ED2: ClassManifest, ED3: ClassManifest]
+      (other: EdgeRDD[ED2])
+      (f: (Pid, EdgePartition[ED], EdgePartition[ED2]) => EdgePartition[ED3]): EdgeRDD[ED3] = {
+    new EdgeRDD[ED3](partitionsRDD.zipPartitions(other.partitionsRDD, preservesPartitioning = true) {
+      (thisIter, otherIter) =>
+        val (pid, thisEPart) = thisIter.next()
+        val (_, otherEPart) = otherIter.next()
+      Iterator(Tuple2(pid, f(pid, thisEPart, otherEPart)))
+    })
+  }
+
+  def innerJoin[ED2: ClassManifest, ED3: ClassManifest]
+      (other: EdgeRDD[ED2])
+      (f: (Vid, Vid, ED, ED2) => ED3): EdgeRDD[ED3] = {
+    val ed2Manifest = classManifest[ED2]
+    val ed3Manifest = classManifest[ED3]
+    zipEdgePartitions(other) { (pid, thisEPart, otherEPart) =>
+      thisEPart.innerJoin(otherEPart)(f)(ed2Manifest, ed3Manifest)
     }
   }
 
