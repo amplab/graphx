@@ -5,7 +5,7 @@ import org.apache.spark._
 import scala.math._
 
 
-object Kcore extends Logging {
+object KCore extends Logging {
 
   def run[VD: Manifest, ED: Manifest](
       graph: Graph[VD, ED],
