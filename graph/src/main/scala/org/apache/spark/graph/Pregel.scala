@@ -117,4 +117,41 @@ object Pregel {
     g
   } // end of apply
 
+
+  // runs Pregel but treats graph as undirected (e.g. sends messages along both in and out edges)
+  def undirectedRun[VD: ClassManifest, ED: ClassManifest, A: ClassManifest]
+    (graph: Graph[VD, ED], initialMsg: A, maxIterations: Int = Int.MaxValue)(
+      vprog: (Vid, VD, A) => VD,
+      sendMsg: EdgeTriplet[VD, ED] => Iterator[(Vid,A)],
+      mergeMsg: (A, A) => A)
+    : Graph[VD, ED] = {
+
+    var g = graph.mapVertices( (vid, vdata) => vprog(vid, vdata, initialMsg) )
+    // compute the messages
+    var messages = g.mapReduceTriplets(sendMsg, mergeMsg).cache()
+    var activeMessages = messages.count()
+    // Loop
+    var i = 0
+    while (activeMessages > 0 && i < maxIterations) {
+      // Receive the messages. Vertices that didn't get any messages do not appear in newVerts.
+      val newVerts = g.vertices.innerJoin(messages)(vprog).cache()
+      // Update the graph with the new vertices.
+      g = g.outerJoinVertices(newVerts) { (vid, old, newOpt) => newOpt.getOrElse(old) }
+
+      val oldMessages = messages
+      // Send new messages. Vertices that didn't get any messages don't appear in newVerts, so don't
+      // get to send messages.
+      messages = g.mapReduceTriplets(sendMsg, mergeMsg, Some((newVerts, EdgeDirection.Both))).cache()
+      activeMessages = messages.count()
+      // after counting we can unpersist the old messages
+      oldMessages.unpersist(blocking=false)
+      // count the iteration
+      i += 1
+    }
+
+    g
+  } // end of apply
+
 } // end of class Pregel
+
+
