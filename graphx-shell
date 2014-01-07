@@ -56,7 +56,7 @@ Example:
 
 "
 
-export SPARK_SHELL_INIT_BLOCK="import org.apache.spark.graph._;"
+export SPARK_SHELL_INIT_BLOCK="import org.apache.spark.graph._; import org.apache.spark.graph.algorithms._;"
 
 # Set the serializer to use Kryo for graphx objects
 SPARK_JAVA_OPTS+=" -Dspark.serializer=org.apache.spark.serializer.KryoSerializer "
