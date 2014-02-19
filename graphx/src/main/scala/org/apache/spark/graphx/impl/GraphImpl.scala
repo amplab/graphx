@@ -314,8 +314,7 @@ object GraphImpl {
   def apply[VD: ClassTag, ED: ClassTag](
       vertices: RDD[(VertexId, VD)],
       edges: RDD[Edge[ED]],
-      defaultVertexAttr: VD): GraphImpl[VD, ED] =
-  {
+      defaultVertexAttr: VD): GraphImpl[VD, ED] = {
     val edgeRDD = createEdgeRDD(edges).cache()
 
     // Get the set of all vids

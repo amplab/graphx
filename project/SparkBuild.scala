@@ -302,6 +302,7 @@ object SparkBuild extends Build {
       "com.twitter"          %% "algebird-core"   % "0.1.11",
       "org.apache.hbase"     %  "hbase"           % "0.94.6" excludeAll(excludeNetty, excludeAsm),
       "org.apache.hbase" % "hbase" % HBASE_VERSION excludeAll(excludeNetty, excludeAsm),
+      "org.apache.mahout" % "mahout-integration" % "0.8",
       "org.apache.cassandra" % "cassandra-all" % "1.2.6"
         exclude("com.google.guava", "guava")
         exclude("com.googlecode.concurrentlinkedhashmap", "concurrentlinkedhashmap-lru")
