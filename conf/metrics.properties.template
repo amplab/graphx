@@ -67,7 +67,7 @@
 #   period    10         Poll period
 #   unit      seconds    Units of poll period
 #   ttl       1          TTL of messages sent by Ganglia
-#   mode      multicast  Ganglia network mode ('unicast' or 'multicast')
+#   mode      multicast  Ganglia network mode ('unicast' or 'mulitcast')
 
 # org.apache.spark.metrics.sink.JmxSink
 
