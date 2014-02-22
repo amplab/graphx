@@ -1,7 +1,7 @@
 package org.apache.spark.examples.graphx
 
 import java.util.regex.Pattern
-import org.apache.spark.graph._
+import org.apache.spark.graphx._
 import java.util.regex.Matcher
 import scala.util.matching.Regex
 import scala.collection.mutable
@@ -28,15 +28,15 @@ class WikiArticle(wtext: String) extends Serializable {
     }
   }
   val relevant: Boolean = !(redirect || stub || disambig || title == null)
-  val vertexID: Vid = WikiArticle.titleHash(title)
+  val vertexID: VertexId = WikiArticle.titleHash(title)
   val edges: HashSet[Edge[Double]] = {
     val temp = neighbors.map { n => Edge(vertexID, n, 1.0) }
     val set = new HashSet[Edge[Double]]() ++ temp
     set
   }
-  // val edges: HashSet[(Vid, Vid)] = {
+  // val edges: HashSet[(VertexId, VertexId)] = {
   //   val temp = neighbors.map { n => (vertexID, n) }
-  //   val set = new HashSet[(Vid, Vid)]() ++ temp
+  //   val set = new HashSet[(VertexId, VertexId)]() ++ temp
   //   set
   // }
 }
@@ -70,7 +70,7 @@ object WikiArticle {
 
   // Hash of the canonical article name. Used for vertex ID.
   // TODO this should be a 64bit hash
-  private def titleHash(title: String): Vid = { math.abs(WikiArticle.myHashcode(canonicalize(title))) }
+  private def titleHash(title: String): VertexId = { math.abs(WikiArticle.myHashcode(canonicalize(title))) }
 
   private def myHashcode(s: String): Long = {
     // var h: Long = 1125899906842597L  // prime

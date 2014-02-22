@@ -3,16 +3,12 @@ package org.apache.spark.examples.graphx
 import org.apache.spark._
 import org.apache.spark.graphx._
 import org.apache.spark.graphx.lib._
-import org.apache.spark.graph.algorithms._
-import org.apache.spark.rdd.NewHadoopRDD
 import org.apache.hadoop.io.LongWritable
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.conf.Configuration
 import org.apache.mahout.text.wikipedia._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkContext._
-import java.util.Calendar
-import scala.math.Ordering.Implicits._
 import org.apache.spark.Logging
 import scala.collection.mutable
 
@@ -46,7 +42,7 @@ object PrePostProcessWikipedia extends Logging {
      case "graphx" => {
        val rawData = args(2)
        val result = graphx(sc, rawData)
-       logWarning(result)
+//       logWarning(result)
      }
      case "prep" => {
        val rawData = args(2)
@@ -54,7 +50,7 @@ object PrePostProcessWikipedia extends Logging {
        prep(sc, rawData, outBase)
      }
 
-     case _ => throw new IllegalArgumentException("Please provide a valid process")
+     case _ => throw new IllegalArgumentException("Please proVertexIde a valid process")
    }
    logWarning(process + "\tTIMEX: " + (System.currentTimeMillis - start)/1000.0)
    sc.stop()
@@ -77,36 +73,36 @@ object PrePostProcessWikipedia extends Logging {
       .map(stringify)
     val wikiRDD = xmlRDD.map { raw => new WikiArticle(raw) }
       .filter { art => art.relevant }.repartition(128)
-    val vertices: RDD[(Vid, String)] = wikiRDD.map { art => (art.vertexID, art.title) }
+    val vertices: RDD[(VertexId, String)] = wikiRDD.map { art => (art.vertexID, art.title) }
     val verticesToSave = vertices.map {v => v._1 + "\t"+ v._2}
     verticesToSave.saveAsTextFile(vertPath)
     val edges: RDD[Edge[Double]] = wikiRDD.flatMap { art => art.edges }
-    val g = Graph(vertices, edges, partitionStrategy = EdgePartition1D)
-    val pr = PageRank.runStandalone(g, 0.01)
-    val prToSave = pr.map {v => v._1 + "\t"+ v._2}
+    val g = Graph(vertices, edges) //TODO what to do about partitionStrategy???
+    val pr = PageRank.run(g, 20)
+    val prToSave = pr.vertices.map {v => v._1 + "\t"+ v._2}
     prToSave.saveAsTextFile(rankPath)
   }
 
   def graphx(sc: SparkContext, rawData: String) {
 
     val conf = new Configuration
-    conf.set("key.value.separator.in.input.line", " ");
-    conf.set("xmlinput.start", "<page>");
-    conf.set("xmlinput.end", "</page>");
+    conf.set("key.value.separator.in.input.line", " ")
+    conf.set("xmlinput.start", "<page>")
+    conf.set("xmlinput.end", "</page>")
 
     val xmlRDD = sc.newAPIHadoopFile(rawData, classOf[XmlInputFormat], classOf[LongWritable], classOf[Text], conf)
       .map(stringify)
     val wikiRDD = xmlRDD.map { raw => new WikiArticle(raw) }
       .filter { art => art.relevant }.repartition(128)
-    val vertices: RDD[(Vid, String)] = wikiRDD.map { art => (art.vertexID, art.title) }
+    val vertices: RDD[(VertexId, String)] = wikiRDD.map { art => (art.vertexID, art.title) }
     val edges: RDD[Edge[Double]] = wikiRDD.flatMap { art => art.edges }
-    val g = Graph(vertices, edges, partitionStrategy = EdgePartition1D)
+    val g = Graph(vertices, edges)
     val resultG = pagerankConnComponentsAlt(4, g)
-    logWarning(s"Final graph has ${resultG.triplets.count} EDGES, ${resultG.vertices.count} VERTICES")
+    logWarning(s"Final graph has ${resultG.triplets.count()} EDGES, ${resultG.vertices.count()} VERTICES")
 //     val pr = PageRank.run(g, 20)
 //     val prAndTitle = g
-//       .outerJoinVertices(pr)({(id: Vid, title: String, rank: Option[Double]) => (title, rank.getOrElse(0.0))})
-//     val top20 = prAndTitle.vertices.top(20)(Ordering.by((entry: (Vid, (String, Double))) => entry._2._2))
+//       .outerJoinVertices(pr)({(id: VertexId, title: String, rank: Option[Double]) => (title, rank.getOrElse(0.0))})
+//     val top20 = prAndTitle.vertices.top(20)(Ordering.by((entry: (VertexId, (String, Double))) => entry._2._2))
 //     top20.mkString("\n")
 
   }
@@ -115,15 +111,26 @@ object PrePostProcessWikipedia extends Logging {
     var currentGraph = g
     for (i <- 0 to numRepetitions) {
       val pr = PageRank.run(currentGraph, 20)
-      val prAndTitle = currentGraph
-        .outerJoinVertices(pr)({(id: Vid, title: String, rank: Option[Double]) => (title, rank.getOrElse(0.0))})
-      val top20 = prAndTitle.vertices.top(20)(Ordering.by((entry: (Vid, (String, Double))) => entry._2._2))
+      val prAndTitle = currentGraph.outerJoinVertices(pr.vertices)({(id: VertexId, title: String, rank: Option[Double]) => (title, rank.getOrElse(0.0))})
+      val top20 = prAndTitle.vertices.top(20)(Ordering.by((entry: (VertexId, (String, Double))) => entry._2._2))
       logWarning(s"Top20 for iteration $i:\n${top20.mkString("\n")}")
       val top20verts = top20.map(_._1).toSet
       // filter out top 20 vertices
-      val newGraph = currentGraph.subgraph(vpred = ((v, d) => !top20Verts.contains(v)))
+      val filterTop20 = {(v: VertexId, d: String) =>
+        !top20verts.contains(v)
+      }
+      val newGraph = currentGraph.subgraph(x => true, filterTop20)
       val ccGraph = ConnectedComponents.run(newGraph)
-      val numCCs = ccGraph.vertices.aggregate(new mutable.HashSet())(((set, vtuple) => set += vtuple._2), ((set1, set2) => set1 union set2)).size
+      val zeroVal = new mutable.HashSet[VertexId]()
+      val seqOp = (s: mutable.HashSet[VertexId], vtuple: (VertexId, VertexId)) => {
+        s.add(vtuple._2)
+        s
+      }
+      val combOp = (s1: mutable.HashSet[VertexId], s2: mutable.HashSet[VertexId]) => { s1 union s2}
+      val numCCs = ccGraph.vertices.aggregate(zeroVal)(seqOp, combOp)
+      //(new mutable.HashSet[Int]())((s: mutable.HashSet[Int], vtuple: (VertexId, Int)) => { s.add(vtuple._2); s },(s1: mutable.HashSet[Int], s2: mutable.HashSet[Int]) => { s1 union s2})
+
+      //(((set, vtuple) => set.add(vtuple._2)), ((set1, set2) => set1 union set2)).size
       logWarning(s"Number of connected components for iteration $i: $numCCs")
       // TODO will this result in too much memory overhead???
       currentGraph = newGraph
@@ -143,7 +150,7 @@ object PrePostProcessWikipedia extends Logging {
       .map(stringify)
     val wikiRDD = xmlRDD.map { raw => new WikiArticle(raw) }
       .filter { art => art.relevant }.repartition(128)
-    val vertices: RDD[(Vid, String)] = wikiRDD.map { art => (art.vertexID, art.title) }
+    val vertices: RDD[(VertexId, String)] = wikiRDD.map { art => (art.vertexID, art.title) }
     val verticesToSave = vertices.map {v => v._1 + "\t"+ v._2}
     verticesToSave.saveAsTextFile(outBase + "_vertices")
     val edges: RDD[Edge[Double]] = wikiRDD.flatMap { art => art.edges }
@@ -159,11 +166,9 @@ object PrePostProcessWikipedia extends Logging {
 
     // slightly cheating, but not really
     val ranksAndAttrs = ranks.join(attrs)
-    val top20 = ranksAndAttrs.top(20)(Ordering.by((entry: (Vid, (Double, String))) => entry._2._1))
+    val top20 = ranksAndAttrs.top(20)(Ordering.by((entry: (VertexId, (Double, String))) => entry._2._1))
     top20.mkString("\n")
   }
-
-
 
   def stringify(tup: (org.apache.hadoop.io.LongWritable, org.apache.hadoop.io.Text)): String = {
     tup._2.toString
