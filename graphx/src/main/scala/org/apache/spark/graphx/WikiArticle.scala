@@ -1,7 +1,7 @@
-package org.apache.spark.examples.graphx
+package org.apache.spark.graphx
 
 import java.util.regex.Pattern
-import org.apache.spark.graphx._
+// import org.apache.spark.graphx._
 import java.util.regex.Matcher
 import scala.util.matching.Regex
 import scala.collection.mutable

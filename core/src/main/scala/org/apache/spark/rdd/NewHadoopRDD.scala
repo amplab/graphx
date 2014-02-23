@@ -23,6 +23,7 @@ import java.util.Date
 import org.apache.hadoop.conf.{Configurable, Configuration}
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.mapreduce._
+import org.apache.mahout.text.wikipedia.XmlInputFormat
 
 import org.apache.spark.{InterruptibleIterator, Logging, Partition, SerializableWritable, SparkContext, TaskContext}
 
@@ -67,7 +68,9 @@ class NewHadoopRDD[K, V](
   @transient private val jobId = new JobID(jobtrackerId, id)
 
   override def getPartitions: Array[Partition] = {
+    logWarning("About to instantiate inputformat.")
     val inputFormat = inputFormatClass.newInstance
+    logWarning("Inputformat instantiated successfully")
     if (inputFormat.isInstanceOf[Configurable]) {
       inputFormat.asInstanceOf[Configurable].setConf(conf)
     }

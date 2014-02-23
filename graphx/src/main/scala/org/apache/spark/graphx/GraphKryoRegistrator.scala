@@ -20,9 +20,15 @@ package org.apache.spark.graphx
 import com.esotericsoftware.kryo.Kryo
 
 import org.apache.spark.graphx.impl._
+// import org.apache.spark.examples.graphx._
 import org.apache.spark.serializer.KryoRegistrator
 import org.apache.spark.util.collection.BitSet
 import org.apache.spark.util.BoundedPriorityQueue
+import scala.collection.mutable
+import org.apache.hadoop.io.LongWritable
+import org.apache.hadoop.io.Text
+// import org.apache.hadoop.conf.Configuration
+import org.apache.mahout.text.wikipedia._
 
 /**
  * Registers GraphX classes with Kryo for improved performance.
@@ -41,6 +47,11 @@ class GraphKryoRegistrator extends KryoRegistrator {
     kryo.register(classOf[PartitionStrategy])
     kryo.register(classOf[BoundedPriorityQueue[Object]])
     kryo.register(classOf[EdgeDirection])
+    kryo.register(classOf[mutable.HashSet[VertexId]])
+    kryo.register(classOf[XmlInputFormat])
+    kryo.register(classOf[LongWritable])
+    kryo.register(classOf[Text])
+    kryo.register(classOf[WikiArticle])
 
     // This avoids a large number of hash table lookups.
     kryo.setReferences(false)

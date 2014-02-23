@@ -20,11 +20,11 @@ object PrePostProcessWikipedia extends Logging {
     val host = args(0)
     val process = args(1)
 
-    val serializer = "org.apache.spark.serializer.KryoSerializer"
-    System.setProperty("spark.serializer", serializer)
-    System.setProperty("spark.kryo.registrator", "org.apache.spark.graph.GraphKryoRegistrator")
+    val sparkconf = new SparkConf()
+      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+      .set("spark.kryo.registrator", "org.apache.spark.graphx.GraphKryoRegistrator")
 
-    val sc = new SparkContext(host, "ETL")
+    val sc = new SparkContext(host, "ETL", sparkconf)
 
    val start = System.currentTimeMillis
    process match {
@@ -41,7 +41,8 @@ object PrePostProcessWikipedia extends Logging {
      }
      case "graphx" => {
        val rawData = args(2)
-       val result = graphx(sc, rawData)
+       val numIters = args(3).toInt
+       val result = benchmarkGraphx(sc, rawData, numIters)
 //       logWarning(result)
      }
      case "prep" => {
@@ -50,7 +51,7 @@ object PrePostProcessWikipedia extends Logging {
        prep(sc, rawData, outBase)
      }
 
-     case _ => throw new IllegalArgumentException("Please proVertexIde a valid process")
+     case _ => throw new IllegalArgumentException("Please provide a valid process")
    }
    logWarning(process + "\tTIMEX: " + (System.currentTimeMillis - start)/1000.0)
    sc.stop()
@@ -62,14 +63,14 @@ object PrePostProcessWikipedia extends Logging {
 
   def prep(sc: SparkContext, rawData: String, outBase: String) {
 
-    val conf = new Configuration
-    conf.set("key.value.separator.in.input.line", " ");
-    conf.set("xmlinput.start", "<page>");
-    conf.set("xmlinput.end", "</page>");
+    val hadoopconf = new org.apache.hadoop.conf.Configuration
+    hadoopconf.set("key.value.separator.in.input.line", " ");
+    hadoopconf.set("xmlinput.start", "<page>");
+    hadoopconf.set("xmlinput.end", "</page>");
 
     val vertPath = outBase + "_vertices"
     val rankPath = outBase + "_ranks"
-    val xmlRDD = sc.newAPIHadoopFile(rawData, classOf[XmlInputFormat], classOf[LongWritable], classOf[Text], conf)
+    val xmlRDD = sc.newAPIHadoopFile(rawData, classOf[XmlInputFormat], classOf[LongWritable], classOf[Text], hadoopconf)
       .map(stringify)
     val wikiRDD = xmlRDD.map { raw => new WikiArticle(raw) }
       .filter { art => art.relevant }.repartition(128)
@@ -83,21 +84,37 @@ object PrePostProcessWikipedia extends Logging {
     prToSave.saveAsTextFile(rankPath)
   }
 
-  def graphx(sc: SparkContext, rawData: String) {
+  def benchmarkGraphx(sc: SparkContext, rawData: String, numIters: Int) {
 
     val conf = new Configuration
     conf.set("key.value.separator.in.input.line", " ")
     conf.set("xmlinput.start", "<page>")
     conf.set("xmlinput.end", "</page>")
 
+    logWarning("Trying to instantiate XmlInputFormat")
+    val xx = classOf[XmlInputFormat].newInstance
+    logWarning(s"XmlInputFOrmat instance: $xx")
+
+    logWarning(s"classOf[String]: ${classOf[String]}")
+    logWarning(s"classOf[XmlInputFormat]: ${classOf[XmlInputFormat]}")
+    logWarning(s"classOf[LongWritable]: ${classOf[LongWritable]}")
+    logWarning(s"classOf[Text]: ${classOf[Text]}")
+    logWarning("about to load xml rdd")
     val xmlRDD = sc.newAPIHadoopFile(rawData, classOf[XmlInputFormat], classOf[LongWritable], classOf[Text], conf)
-      .map(stringify)
-    val wikiRDD = xmlRDD.map { raw => new WikiArticle(raw) }
+    xmlRDD.count
+    logWarning("XML RDD counted")
+    val stringrdd = xmlRDD.map(stringify)
+    stringrdd.count
+    logWarning("String RDD counted")
+    val wikiRDD = stringrdd.map { raw => new WikiArticle(raw) }
       .filter { art => art.relevant }.repartition(128)
     val vertices: RDD[(VertexId, String)] = wikiRDD.map { art => (art.vertexID, art.title) }
     val edges: RDD[Edge[Double]] = wikiRDD.flatMap { art => art.edges }
+    logWarning("creating graph")
     val g = Graph(vertices, edges)
-    val resultG = pagerankConnComponentsAlt(4, g)
+    g.triplets.count
+    logWarning("Graph triplets counted.")
+    val resultG = pagerankConnComponentsAlt(numIters, g)
     logWarning(s"Final graph has ${resultG.triplets.count()} EDGES, ${resultG.vertices.count()} VERTICES")
 //     val pr = PageRank.run(g, 20)
 //     val prAndTitle = g
@@ -109,9 +126,15 @@ object PrePostProcessWikipedia extends Logging {
 
   def pagerankConnComponentsAlt(numRepetitions: Int, g: Graph[String, Double]): Graph[String, Double] = {
     var currentGraph = g
+    logWarning("starting iterations")
     for (i <- 0 to numRepetitions) {
+      logWarning("starting pagerank")
       val pr = PageRank.run(currentGraph, 20)
+      pr.vertices.count
+      logWarning("Pagerank completed")
       val prAndTitle = currentGraph.outerJoinVertices(pr.vertices)({(id: VertexId, title: String, rank: Option[Double]) => (title, rank.getOrElse(0.0))})
+      prAndTitle.vertices.count
+      logWarning("join completed.")
       val top20 = prAndTitle.vertices.top(20)(Ordering.by((entry: (VertexId, (String, Double))) => entry._2._2))
       logWarning(s"Top20 for iteration $i:\n${top20.mkString("\n")}")
       val top20verts = top20.map(_._1).toSet
