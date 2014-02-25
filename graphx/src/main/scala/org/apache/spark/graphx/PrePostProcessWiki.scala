@@ -10,7 +10,8 @@ import org.apache.mahout.text.wikipedia._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkContext._
 import org.apache.spark.Logging
-import scala.collection.mutable
+// import scala.collection.mutable
+import java.util.{HashSet => JHashSet, TreeSet => JTreeSet}
 // import org.apache.spark.graphx.MakeString
 
 
@@ -74,7 +75,6 @@ object PrePostProcessWikipedia extends Logging {
     val rankPath = outBase + "_ranks"
 
     val xmlRDD = sc.newAPIHadoopFile(rawData, classOf[XmlInputFormat], classOf[LongWritable], classOf[Text], hadoopconf)
-//       .map(t => (new MakeString(t)).str)
       .map(t => t._2.toString)
 
     val wikiRDD = xmlRDD.map { raw => new WikiArticle(raw) }
@@ -96,30 +96,24 @@ object PrePostProcessWikipedia extends Logging {
     conf.set("xmlinput.start", "<page>")
     conf.set("xmlinput.end", "</page>")
 
-    logWarning("Trying to instantiate XmlInputFormat")
-    val xx = classOf[XmlInputFormat].newInstance
-    logWarning(s"XmlInputFOrmat instance: $xx")
-
-    logWarning(s"classOf[String]: ${classOf[String]}")
-    logWarning(s"classOf[XmlInputFormat]: ${classOf[XmlInputFormat]}")
-    logWarning(s"classOf[LongWritable]: ${classOf[LongWritable]}")
-    logWarning(s"classOf[Text]: ${classOf[Text]}")
     logWarning("about to load xml rdd")
     val xmlRDD = sc.newAPIHadoopFile(rawData, classOf[XmlInputFormat], classOf[LongWritable], classOf[Text], conf)
       .map(t => t._2.toString)
-//       .map(t => (new MakeString(t)).str)
-    xmlRDD.count
-    logWarning("XML RDD counted")
+    // xmlRDD.count
+    logWarning(s"XML RDD counted. Found ${xmlRDD.count} raw articles.")
     val wikiRDD = xmlRDD.map { raw => new WikiArticle(raw) }
       .filter { art => art.relevant }.repartition(128)
+    logWarning(s"wikiRDD counted. Found ${wikiRDD.count} relevant articles.")
     val vertices: RDD[(VertexId, String)] = wikiRDD.map { art => (art.vertexID, art.title) }
     val edges: RDD[Edge[Double]] = wikiRDD.flatMap { art => art.edges }
     logWarning("creating graph")
     val g = Graph(vertices, edges)
-    g.triplets.count
-    logWarning("Graph triplets counted.")
-    val resultG = pagerankConnComponentsAlt(numIters, g)
-    logWarning(s"Final graph has ${resultG.triplets.count()} EDGES, ${resultG.vertices.count()} VERTICES")
+    val cleanG = g.subgraph(x => true, (vid, vd) => vd != null)
+    logWarning(s"DIRTY graph has ${g.triplets.count()} EDGES, ${g.vertices.count()} VERTICES")
+    logWarning(s"CLEAN graph has ${cleanG.triplets.count()} EDGES, ${cleanG.vertices.count()} VERTICES")
+    val resultG = pagerankConnComponentsAlt(numIters, cleanG)
+    logWarning(s"ORIGINAL graph has ${cleanG.triplets.count()} EDGES, ${cleanG.vertices.count()} VERTICES")
+    logWarning(s"FINAL graph has ${resultG.triplets.count()} EDGES, ${resultG.vertices.count()} VERTICES")
 //     val pr = PageRank.run(g, 20)
 //     val prAndTitle = g
 //       .outerJoinVertices(pr)({(id: VertexId, title: String, rank: Option[Double]) => (title, rank.getOrElse(0.0))})
@@ -148,13 +142,27 @@ object PrePostProcessWikipedia extends Logging {
       }
       val newGraph = currentGraph.subgraph(x => true, filterTop20)
       val ccGraph = ConnectedComponents.run(newGraph)
-      val zeroVal = new mutable.HashSet[VertexId]()
-      val seqOp = (s: mutable.HashSet[VertexId], vtuple: (VertexId, VertexId)) => {
+//       val zeroVal = new mutable.HashSet[VertexId]()
+//       val seqOp = (s: mutable.HashSet[VertexId], vtuple: (VertexId, VertexId)) => {
+//         s.add(vtuple._2)
+//         s
+//       }
+//       val combOp = (s1: mutable.HashSet[VertexId], s2: mutable.HashSet[VertexId]) => { s1 union s2}
+//       val numCCs = ccGraph.vertices.aggregate(zeroVal)(seqOp, combOp)
+
+
+      val zeroVal = new JTreeSet[VertexId]()
+      val seqOp = (s: JTreeSet[VertexId], vtuple: (VertexId, VertexId)) => {
         s.add(vtuple._2)
         s
       }
-      val combOp = (s1: mutable.HashSet[VertexId], s2: mutable.HashSet[VertexId]) => { s1 union s2}
-      val numCCs = ccGraph.vertices.aggregate(zeroVal)(seqOp, combOp)
+      val combOp = (s1: JTreeSet[VertexId], s2: JTreeSet[VertexId]) => {
+        s1.addAll(s2)
+        s1
+      }
+      val numCCs = ccGraph.vertices.aggregate(zeroVal)(seqOp, combOp).size()
+
+
       //(new mutable.HashSet[Int]())((s: mutable.HashSet[Int], vtuple: (VertexId, Int)) => { s.add(vtuple._2); s },(s1: mutable.HashSet[Int], s2: mutable.HashSet[Int]) => { s1 union s2})
 
       //(((set, vtuple) => set.add(vtuple._2)), ((set1, set2) => set1 union set2)).size
@@ -173,7 +181,6 @@ object PrePostProcessWikipedia extends Logging {
     conf.set("xmlinput.start", "<page>");
     conf.set("xmlinput.end", "</page>");
     val xmlRDD = sc.newAPIHadoopFile(rawData, classOf[XmlInputFormat], classOf[LongWritable], classOf[Text], conf)
-//       .map(t => (new MakeString(t)).str)
       .map(t => t._2.toString)
     val wikiRDD = xmlRDD.map { raw => new WikiArticle(raw) }
       .filter { art => art.relevant }.repartition(128)

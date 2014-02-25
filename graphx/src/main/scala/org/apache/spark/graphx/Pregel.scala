@@ -119,20 +119,14 @@ object Pregel extends Logging {
       mergeMsg: (A, A) => A)
     : Graph[VD, ED] =
   {
-    logError("In pregel apply")
     var g = graph.mapVertices((vid, vdata) => vprog(vid, vdata, initialMsg)).cache()
-    logError("aaaa")
     // compute the messages
     var messages = g.mapReduceTriplets(sendMsg, mergeMsg)
-    logError("bbbbb")
     var activeMessages = messages.count()
-    logError("ccccc")
     // Loop
     var prevG: Graph[VD, ED] = null.asInstanceOf[Graph[VD, ED]]
-    logError("ddddd")
     var i = 0
     while (activeMessages > 0 && i < maxIterations) {
-      logWarning(s"In pregel iteration $i")
       // Receive the messages. Vertices that didn't get any messages do not appear in newVerts.
       val newVerts = g.vertices.innerJoin(messages)(vprog).cache()
       // Update the graph with the new vertices.

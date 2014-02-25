@@ -68,9 +68,7 @@ class NewHadoopRDD[K, V](
   @transient private val jobId = new JobID(jobtrackerId, id)
 
   override def getPartitions: Array[Partition] = {
-    logWarning("About to instantiate inputformat.")
     val inputFormat = inputFormatClass.newInstance
-    logWarning("Inputformat instantiated successfully")
     if (inputFormat.isInstanceOf[Configurable]) {
       inputFormat.asInstanceOf[Configurable].setConf(conf)
     }

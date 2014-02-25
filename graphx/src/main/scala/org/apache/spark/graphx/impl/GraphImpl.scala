@@ -330,6 +330,7 @@ object GraphImpl {
     GraphImpl(vertexRDD, edgeRDD)
   }
 
+  // NOTE(crankshaw) this is the constructor the wiki pipeline uses
   def apply[VD: ClassTag, ED: ClassTag](
       vertices: VertexRDD[VD],
       edges: EdgeRDD[ED]): GraphImpl[VD, ED] = {

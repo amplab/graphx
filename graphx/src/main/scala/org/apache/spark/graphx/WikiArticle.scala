@@ -24,10 +24,10 @@ class WikiArticle(wtext: String) extends Serializable {
     try {
       XML.loadString(tiXML).text
     } catch {
-      case e => "" // don't use null because we get null pointer exceptions
+      case e => "NOTFOUND" // don't use null because we get null pointer exceptions
     }
   }
-  val relevant: Boolean = !(redirect || stub || disambig || title == null)
+  val relevant: Boolean = !(redirect || stub || disambig || title == "NOTFOUND" || title == null)
   val vertexID: VertexId = WikiArticle.titleHash(title)
   val edges: HashSet[Edge[Double]] = {
     val temp = neighbors.map { n => Edge(vertexID, n, 1.0) }
@@ -55,7 +55,7 @@ object WikiArticle {
       val temp: Array[String] = matcher.group(1).split("\\|")
       if (temp != null && temp.length > 0) {
         val link: String = temp(0)
-        if (link.contains(":") == false) {
+        if (!link.contains(":")) {
           linkBuilder += link
         }
       }
@@ -73,24 +73,20 @@ object WikiArticle {
   private def titleHash(title: String): VertexId = { math.abs(WikiArticle.myHashcode(canonicalize(title))) }
 
   private def myHashcode(s: String): Long = {
-    // var h: Long = 1125899906842597L  // prime
-    // var h: Long = 4294967291L // prime
-  //   var h = 29
-  //   val len: Int = s.length
-  //   for (i<- 0 until len) {
-  //     h = 31*h + s.charAt(i)
-  //   }
-  //   h
-  //   // s.hashCode()
-  // }
-
-    val md: MessageDigest = MessageDigest.getInstance("MD5")
-    md.update(s.getBytes)
-    val result: Array[Byte] = md.digest()
-    val longResult = ByteBuffer.wrap(result).getLong
-    // shift result by 2
-    val retval = longResult >> 10
-    retval
+    var h: Long = 1125899906842597L  // prime
+    // var h = 29
+    val len: Int = s.length
+    for (i <- 0 until len) {
+      h = 31*h + s.charAt(i)
+    }
+    h
+//     val md: MessageDigest = MessageDigest.getInstance("MD5")
+//     md.update(s.getBytes)
+//     val result: Array[Byte] = md.digest()
+//     val longResult = ByteBuffer.wrap(result).getLong
+//     // shift result by 2
+//     val retval = longResult >> 10
+//     retval
   }
 
 }

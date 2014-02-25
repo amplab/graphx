@@ -26,6 +26,7 @@ import org.apache.spark.util.collection.BitSet
 import org.apache.spark.util.BoundedPriorityQueue
 import scala.collection.mutable
 import org.apache.hadoop.io.{LongWritable, Text}
+import java.util.{HashSet => JHashSet, TreeSet => JTreeSet}
 // import org.apache.hadoop.conf.Configuration
 import org.apache.mahout.text.wikipedia._
 
@@ -51,6 +52,8 @@ class GraphKryoRegistrator extends KryoRegistrator {
     kryo.register(classOf[LongWritable])
     kryo.register(classOf[Text])
     kryo.register(classOf[WikiArticle])
+    kryo.register(classOf[JHashSet[VertexId]])
+    kryo.register(classOf[JTreeSet[VertexId]])
 //     kryo.register(classOf[MakeString])
 //     kryo.register(classOf[PrePostProcessWikipedia])
 //     kryo.register(classOf[(LongWritable, Text)])
