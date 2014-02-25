@@ -77,8 +77,9 @@ object PrePostProcessWikipedia extends Logging {
     val xmlRDD = sc.newAPIHadoopFile(rawData, classOf[XmlInputFormat], classOf[LongWritable], classOf[Text], hadoopconf)
       .map(t => t._2.toString)
 
-    val wikiRDD = xmlRDD.map { raw => new WikiArticle(raw) }
-      .filter { art => art.relevant }.repartition(128)
+    val allArtsRDD = xmlRDD.map { raw => new WikiArticle(raw) }
+
+    val wikiRDD = allArtsRDD.filter { art => art.relevant }.repartition(128)
     val vertices: RDD[(VertexId, String)] = wikiRDD.map { art => (art.vertexID, art.title) }
     val verticesToSave = vertices.map {v => v._1 + "\t"+ v._2}
     verticesToSave.saveAsTextFile(vertPath)
@@ -101,8 +102,15 @@ object PrePostProcessWikipedia extends Logging {
       .map(t => t._2.toString)
     // xmlRDD.count
     logWarning(s"XML RDD counted. Found ${xmlRDD.count} raw articles.")
-    val wikiRDD = xmlRDD.map { raw => new WikiArticle(raw) }
-      .filter { art => art.relevant }.repartition(128)
+
+    val allArtsRDD = xmlRDD.map { raw => new WikiArticle(raw) }.cache
+    val numRedirects = allArtsRDD.filter { art => art.redirect }.count
+    val numStubs = allArtsRDD.filter { art => art.stub }.count
+    val numDisambig = allArtsRDD.filter { art => art.disambig }.count
+    val numTitleNotFound = allArtsRDD.filter { art => art.title == WikiArticle.notFoundString }.count
+    logWarning(s"Filter results:\tRedirects: $numRedirects \tStubs: $numStubs \tDisambiguations: $numDisambig \t Title not found: $numTitleNotFound")
+ 
+    val wikiRDD = allArtsRDD.filter { art => art.relevant }.repartition(128)
     logWarning(s"wikiRDD counted. Found ${wikiRDD.count} relevant articles.")
     val vertices: RDD[(VertexId, String)] = wikiRDD.map { art => (art.vertexID, art.title) }
     val edges: RDD[Edge[Double]] = wikiRDD.flatMap { art => art.edges }
@@ -126,6 +134,7 @@ object PrePostProcessWikipedia extends Logging {
     var currentGraph = g
     logWarning("starting iterations")
     for (i <- 0 to numRepetitions) {
+      val startTime = System.currentTimeMillis
       logWarning("starting pagerank")
       val pr = PageRank.run(currentGraph, 20)
       pr.vertices.count
@@ -167,6 +176,7 @@ object PrePostProcessWikipedia extends Logging {
 
       //(((set, vtuple) => set.add(vtuple._2)), ((set1, set2) => set1 union set2)).size
       logWarning(s"Number of connected components for iteration $i: $numCCs")
+      logWarning(s"TIMEX iter $i ${(System.currentTimeMillis - startTime)/1000.0}")
       // TODO will this result in too much memory overhead???
       currentGraph = newGraph
     }

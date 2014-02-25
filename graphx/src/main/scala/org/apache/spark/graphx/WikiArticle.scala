@@ -24,10 +24,10 @@ class WikiArticle(wtext: String) extends Serializable {
     try {
       XML.loadString(tiXML).text
     } catch {
-      case e => "NOTFOUND" // don't use null because we get null pointer exceptions
+      case e => WikiArticle.notFoundString // don't use null because we get null pointer exceptions
     }
   }
-  val relevant: Boolean = !(redirect || stub || disambig || title == "NOTFOUND" || title == null)
+  val relevant: Boolean = !(redirect || stub || disambig || title == WikiArticle.notFoundString || title == null)
   val vertexID: VertexId = WikiArticle.titleHash(title)
   val edges: HashSet[Edge[Double]] = {
     val temp = neighbors.map { n => Edge(vertexID, n, 1.0) }
@@ -47,6 +47,8 @@ object WikiArticle {
   @transient val disambigPattern = "\\{\\{disambig\\}\\}".r
   @transient val stubPattern = "\\-stub\\}\\}".r
   @transient val linkPattern = Pattern.compile("\\[\\[(.*?)\\]\\]", Pattern.MULTILINE) 
+
+  val notFoundString = "NOTFOUND"
 
   private def parseLinks(wt: String): Array[String] = {
     val linkBuilder = new mutable.ArrayBuffer[String]()
