@@ -14,6 +14,43 @@ import org.apache.spark.Logging
 import java.util.{HashSet => JHashSet, TreeSet => JTreeSet}
 // import org.apache.spark.graphx.MakeString
 
+class TrackCounts extends Serializable {
+
+  var red: Long = 0
+  var stub: Long = 0
+  var disambig: Long = 0
+  var notFound: Long = 0
+  var titleNull: Long = 0
+  var relevant: Long = 0
+  var total: Long = 0
+
+  def update(o: TrackCounts) {
+    red += o.red
+    stub += o.stub
+    disambig += o.disambig
+    notFound += o.notFound
+    titleNull += o.titleNull
+    relevant += o.relevant
+    total += o.total
+  }
+
+  def addArticle(art: WikiArticle) {
+    if (art.redirect) red += 1
+    if (art.stub) stub += 1
+    if (art.disambig) disambig += 1
+    if (art.title == WikiArticle.notFoundString) notFound += 1
+    if (art.title == null) titleNull += 1
+    if (art.relevant) relevant += 1
+    total += 1
+  }
+
+  override def toString: String = {
+    s"Redirects: $red, Stubs: $stub, Disambig: $disambig, Not Found: $notFound, Null: $titleNull, RELEVANT: $relevant, TOTAL: $total"
+
+  }
+
+}
+
 
 object PrePostProcessWikipedia extends Logging {
 
@@ -104,19 +141,39 @@ object PrePostProcessWikipedia extends Logging {
     logWarning(s"XML RDD counted. Found ${xmlRDD.count} raw articles.")
 
     val allArtsRDD = xmlRDD.map { raw => new WikiArticle(raw) }.cache
-    val numRedirects = allArtsRDD.filter { art => art.redirect }.count
-    val numStubs = allArtsRDD.filter { art => art.stub }.count
-    val numDisambig = allArtsRDD.filter { art => art.disambig }.count
-    val numTitleNotFound = allArtsRDD.filter { art => art.title == WikiArticle.notFoundString }.count
-    logWarning(s"Filter results:\tRedirects: $numRedirects \tStubs: $numStubs \tDisambiguations: $numDisambig \t Title not found: $numTitleNotFound")
+    // val numRedirects = allArtsRDD.filter { art => art.redirect }.count
+    // val numStubs = allArtsRDD.filter { art => art.stub }.count
+    // val numDisambig = allArtsRDD.filter { art => art.disambig }.count
+    // val numTitleNotFound = allArtsRDD.filter { art => art.title == WikiArticle.notFoundString }.count
+    // logWarning(s"Filter results:\tRedirects: $numRedirects \tStubs: $numStubs \tDisambiguations: $numDisambig \t Title not found: $numTitleNotFound")
  
-    val wikiRDD = allArtsRDD.filter { art => art.relevant }.repartition(128)
-    logWarning(s"wikiRDD counted. Found ${wikiRDD.count} relevant articles.")
+    val wikiRDD = allArtsRDD.filter { art => art.relevant }.cache //.repartition(128)
+    wikiRDD.repartition(128)
+    // val wikiRDD = allArtsRDD.filter { art => art.relevant }.repartition(128)
+    val wikiRDDCount = wikiRDD.count
+    logWarning(s"wikiRDD counted. Found ${wikiRDDCount} relevant articles.")
+    // logWarning("Counting differently")
+
+    // count: redirects, stubs, disambigs, titlenotfound, titlenull, relevant, total
+//     val zeroCount = new TrackCounts
+//     val countSeqOp = (curCount: TrackCounts, art: WikiArticle) => {
+//       curCount.addArticle(art)
+//       curCount
+//     }
+//     val countCombOp = (c1: TrackCounts, c2: TrackCounts) => {
+//       c1.update(c2)
+//       c1
+//     }
+//
+//     val cr = allArtsRDD.aggregate(zeroCount)(countSeqOp, countCombOp)
+//     logWarning(s"Different count results: $cr")
+//     System.exit(0)
+
     val vertices: RDD[(VertexId, String)] = wikiRDD.map { art => (art.vertexID, art.title) }
     val edges: RDD[Edge[Double]] = wikiRDD.flatMap { art => art.edges }
     logWarning("creating graph")
     val g = Graph(vertices, edges)
-    val cleanG = g.subgraph(x => true, (vid, vd) => vd != null)
+    val cleanG = g.subgraph(x => true, (vid, vd) => vd != null).cache
     logWarning(s"DIRTY graph has ${g.triplets.count()} EDGES, ${g.vertices.count()} VERTICES")
     logWarning(s"CLEAN graph has ${cleanG.triplets.count()} EDGES, ${cleanG.vertices.count()} VERTICES")
     val resultG = pagerankConnComponentsAlt(numIters, cleanG)
@@ -134,12 +191,13 @@ object PrePostProcessWikipedia extends Logging {
     var currentGraph = g
     logWarning("starting iterations")
     for (i <- 0 to numRepetitions) {
+      currentGraph.cache
       val startTime = System.currentTimeMillis
       logWarning("starting pagerank")
-      val pr = PageRank.run(currentGraph, 20)
+      val pr = PageRank.run(currentGraph, 20).cache
       pr.vertices.count
       logWarning("Pagerank completed")
-      val prAndTitle = currentGraph.outerJoinVertices(pr.vertices)({(id: VertexId, title: String, rank: Option[Double]) => (title, rank.getOrElse(0.0))})
+      val prAndTitle = currentGraph.outerJoinVertices(pr.vertices)({(id: VertexId, title: String, rank: Option[Double]) => (title, rank.getOrElse(0.0))}).cache
       prAndTitle.vertices.count
       logWarning("join completed.")
       val top20 = prAndTitle.vertices.top(20)(Ordering.by((entry: (VertexId, (String, Double))) => entry._2._2))
@@ -149,8 +207,8 @@ object PrePostProcessWikipedia extends Logging {
       val filterTop20 = {(v: VertexId, d: String) =>
         !top20verts.contains(v)
       }
-      val newGraph = currentGraph.subgraph(x => true, filterTop20)
-      val ccGraph = ConnectedComponents.run(newGraph)
+      val newGraph = currentGraph.subgraph(x => true, filterTop20).cache
+      val ccGraph = ConnectedComponents.run(newGraph).cache
 //       val zeroVal = new mutable.HashSet[VertexId]()
 //       val seqOp = (s: mutable.HashSet[VertexId], vtuple: (VertexId, VertexId)) => {
 //         s.add(vtuple._2)
