@@ -33,6 +33,11 @@ case class Edge[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) ED] 
     var attr: ED = null.asInstanceOf[ED])
   extends Serializable {
 
+  /** An index into the local VertexPartition for the source vertex entry. */
+  private[graphx] var srcLocalVid: Int = -1
+  /** An index into the local VertexPartition for the destination vertex entry. */
+  private[graphx] var dstLocalVid: Int = -1
+
   /**
    * Given one vertex in the edge return the other vertex.
    *
@@ -52,11 +57,4 @@ case class Edge[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) ED] 
    */
   def relativeDirection(vid: VertexId): EdgeDirection =
     if (vid == srcId) EdgeDirection.Out else { assert(vid == dstId); EdgeDirection.In }
-}
-
-object Edge {
-  private[graphx] def lexicographicOrdering[ED] = new Ordering[Edge[ED]] {
-    override def compare(a: Edge[ED], b: Edge[ED]): Int =
-      (if (a.srcId != b.srcId) a.srcId - b.srcId else a.dstId - b.dstId).toInt
-  }
 }

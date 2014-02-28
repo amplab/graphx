@@ -26,18 +26,25 @@ import org.apache.spark.graphx.util.collection.PrimitiveKeyOpenHashMap
  * A collection of edges stored in 3 large columnar arrays (src, dst, attribute). The arrays are
  * clustered by src.
  *
- * @param srcIds the source vertex id of each edge
- * @param dstIds the destination vertex id of each edge
+ * @param srcIds the source vertex id of each edge, as a local vid
+ * @param dstIds the destination vertex id of each edge, as a local vid
  * @param data the attribute associated with each edge
- * @param index a clustered index on source vertex id
- * @tparam ED the edge attribute type.
+ * @param index a clustered index on source local vid
+ * @tparam ED the edge attribute type
  */
 private[graphx]
 class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) ED: ClassTag](
-    val srcIds: Array[VertexId],
-    val dstIds: Array[VertexId],
-    val data: Array[ED],
-    val index: PrimitiveKeyOpenHashMap[VertexId, Int]) extends Serializable {
+    private val srcIds: Array[Int],
+    private val dstIds: Array[Int],
+    private val data: Array[ED],
+    private val index: PrimitiveKeyOpenHashMap[Int, Int],
+    val vertexIndex: VertexIdToIndexMap) extends Serializable {
+
+  /** Return the vertex ID corresponding to the given localVid. */
+  def lookup(localVid: Int): VertexId = vertexIndex.getValue(localVid)
+
+  def srcVidAt(i: Int): VertexId = lookup(srcIds(i))
+  def dstVidAt(i: Int): VertexId = lookup(dstIds(i))
 
   /**
    * Reverse all the edges in this partition.
@@ -45,9 +52,9 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
    * @return a new edge partition with all edges reversed.
    */
   def reverse: EdgePartition[ED] = {
-    val builder = new EdgePartitionBuilder(size)
+    val builder = new ExistingEdgePartitionBuilder(vertexIndex, size)
     for (e <- iterator) {
-      builder.add(e.dstId, e.srcId, e.attr)
+      builder.add(e.dstLocalVid, e.srcLocalVid, e.attr)
     }
     builder.toEdgePartition
   }
@@ -63,17 +70,12 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
    */
   def map[ED2: ClassTag](f: Edge[ED] => ED2): EdgePartition[ED2] = {
     val newData = new Array[ED2](data.size)
-    val edge = new Edge[ED]()
-    val size = data.size
     var i = 0
-    while (i < size) {
-      edge.srcId  = srcIds(i)
-      edge.dstId  = dstIds(i)
-      edge.attr = data(i)
-      newData(i) = f(edge)
+    for (e <- iterator) {
+      newData(i) = f(e)
       i += 1
     }
-    new EdgePartition(srcIds, dstIds, newData, index)
+    new EdgePartition(srcIds, dstIds, newData, index, vertexIndex)
   }
 
   /**
@@ -97,7 +99,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
       i += 1
     }
     assert(newData.size == i)
-    new EdgePartition(srcIds, dstIds, newData, index)
+    new EdgePartition(srcIds, dstIds, newData, index, vertexIndex)
   }
 
   /**
@@ -117,9 +119,9 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
    * @return a new edge partition without duplicate edges
    */
   def groupEdges(merge: (ED, ED) => ED): EdgePartition[ED] = {
-    val builder = new EdgePartitionBuilder[ED]
-    var currSrcId: VertexId = null.asInstanceOf[VertexId]
-    var currDstId: VertexId = null.asInstanceOf[VertexId]
+    val builder = new ExistingEdgePartitionBuilder[ED](vertexIndex)
+    var currSrcId: Int = -1
+    var currDstId: Int = -1
     var currAttr: ED = null.asInstanceOf[ED]
     var i = 0
     while (i < size) {
@@ -154,7 +156,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
   def innerJoin[ED2: ClassTag, ED3: ClassTag]
       (other: EdgePartition[ED2])
       (f: (VertexId, VertexId, ED, ED2) => ED3): EdgePartition[ED3] = {
-    val builder = new EdgePartitionBuilder[ED3]
+    val builder = new ExistingEdgePartitionBuilder[ED3](vertexIndex)
     var i = 0
     var j = 0
     // For i = index of each edge in `this`...
@@ -167,7 +169,9 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
         while (j < other.size && other.srcIds(j) == srcId && other.dstIds(j) < dstId) { j += 1 }
         if (j < other.size && other.srcIds(j) == srcId && other.dstIds(j) == dstId) {
           // ... run `f` on the matching edge
-          builder.add(srcId, dstId, f(srcId, dstId, this.data(i), other.data(j)))
+          val srcVid = lookup(srcId)
+          val dstVid = lookup(dstId)
+          builder.add(srcId, dstId, f(srcVid, dstVid, this.data(i), other.data(j)))
         }
       }
       i += 1
@@ -185,6 +189,8 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
   /** The number of unique source vertices in the partition. */
   def indexSize: Int = index.size
 
+  def vertexIds: Array[VertexId] = Array.concat(srcIds.map(lookup(_)), dstIds.map(lookup(_)))
+
   /**
    * Get an iterator over the edges in this partition.
    *
@@ -197,8 +203,10 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
     override def hasNext: Boolean = pos < EdgePartition.this.size
 
     override def next(): Edge[ED] = {
-      edge.srcId = srcIds(pos)
-      edge.dstId = dstIds(pos)
+      edge.srcId = srcVidAt(pos)
+      edge.dstId = dstVidAt(pos)
+      edge.srcLocalVid = srcIds(pos)
+      edge.dstLocalVid = dstIds(pos)
       edge.attr = data(pos)
       pos += 1
       edge
@@ -206,18 +214,18 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
   }
 
   /**
-   * Get an iterator over the edges in this partition whose source vertex ids match srcIdPred. The
+   * Get an iterator over the edges in this partition whose source local vids match srcIdPred. The
    * iterator is generated using an index scan, so it is efficient at skipping edges that don't
    * match srcIdPred.
    */
-  def indexIterator(srcIdPred: VertexId => Boolean): Iterator[Edge[ED]] =
+  def indexIterator(srcIdPred: Int => Boolean): Iterator[Edge[ED]] =
     index.iterator.filter(kv => srcIdPred(kv._1)).flatMap(Function.tupled(clusterIterator))
 
   /**
-   * Get an iterator over the cluster of edges in this partition with source vertex id `srcId`. The
+   * Get an iterator over the cluster of edges in this partition with source local vid `srcId`. The
    * cluster must start at position `index`.
    */
-  private def clusterIterator(srcId: VertexId, index: Int) = new Iterator[Edge[ED]] {
+  private def clusterIterator(srcId: Int, index: Int) = new Iterator[Edge[ED]] {
     private[this] val edge = new Edge[ED]
     private[this] var pos = index
 
@@ -227,8 +235,10 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
 
     override def next(): Edge[ED] = {
       assert(srcIds(pos) == srcId)
-      edge.srcId = srcIds(pos)
-      edge.dstId = dstIds(pos)
+      edge.srcId = srcVidAt(pos)
+      edge.dstId = dstVidAt(pos)
+      edge.srcLocalVid = srcIds(pos)
+      edge.dstLocalVid = dstIds(pos)
       edge.attr = data(pos)
       pos += 1
       edge

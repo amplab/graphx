@@ -118,13 +118,13 @@ class GraphSuite extends FunSuite with LocalSparkContext {
       // Each vertex should be replicated to at most 2 * sqrt(p) partitions
       val partitionSets = partitionedGraph.edges.partitionsRDD.mapPartitions { iter =>
         val part = iter.next()._2
-        Iterator((part.srcIds ++ part.dstIds).toSet)
+        Iterator(part.vertexIds.toSet)
       }.collect
       assert(verts.forall(id => partitionSets.count(_.contains(id)) <= bound))
       // This should not be true for the default hash partitioning
       val partitionSetsUnpartitioned = graph.edges.partitionsRDD.mapPartitions { iter =>
         val part = iter.next()._2
-        Iterator((part.srcIds ++ part.dstIds).toSet)
+        Iterator(part.vertexIds.toSet)
       }.collect
       assert(verts.exists(id => partitionSetsUnpartitioned.count(_.contains(id)) > bound))
     }
@@ -220,8 +220,7 @@ class GraphSuite extends FunSuite with LocalSparkContext {
         sc.parallelize((1 to n).flatMap(x =>
           List((0: VertexId, x: VertexId), (0: VertexId, x: VertexId))), 1), "v")
       val star2 = doubleStar.groupEdges { (a, b) => a}
-      assert(star2.edges.collect.toArray.sorted(Edge.lexicographicOrdering[Int]) ===
-        star.edges.collect.toArray.sorted(Edge.lexicographicOrdering[Int]))
+      assert(star2.edges.collect.toSet === star.edges.collect.toSet)
       assert(star2.vertices.collect.toSet === star.vertices.collect.toSet)
     }
   }
@@ -261,7 +260,7 @@ class GraphSuite extends FunSuite with LocalSparkContext {
           throw new Exception("map ran on edge with src vid %d, which is even".format(et.dstId))
         }
         Iterator((et.dstId, 1))
-      }, (a: Int, b: Int) => a + b, Some(changed, EdgeDirection.Out)).collect.toSet
+      }, (a: Int, b: Int) => a + b, Some((changed, EdgeDirection.Out))).collect.toSet
       assert(numOddNeighbors === (2 to n by 2).map(x => (x: VertexId, 1)).toSet)
 
     }

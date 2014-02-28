@@ -62,6 +62,9 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassTag](
   /** Return the vertex attribute for the given vertex ID. */
   def apply(vid: VertexId): VD = values(index.getPos(vid))
 
+  /** Return the vertex attribute for the given local vertex ID. */
+  def lookup(localVid: Int): VD = values(localVid)
+
   def isDefined(vid: VertexId): Boolean = {
     val pos = index.getPos(vid)
     pos >= 0 && mask.get(pos)
@@ -70,6 +73,11 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassTag](
   /** Look up vid in activeSet, throwing an exception if it is None. */
   def isActive(vid: VertexId): Boolean = {
     activeSet.get.contains(vid)
+  }
+
+  /** Look up the VertexId corresponding to localVid in activeSet. */
+  def localVidIsActive(localVid: Int): Boolean = {
+    activeSet.get.contains(index.getValue(localVid))
   }
 
   /** The number of active vertices, if any exist. */

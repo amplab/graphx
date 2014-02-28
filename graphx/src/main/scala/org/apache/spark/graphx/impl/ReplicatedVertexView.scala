@@ -44,27 +44,6 @@ class ReplicatedVertexView[VD: ClassTag](
     routingTable: RoutingTable,
     prevViewOpt: Option[ReplicatedVertexView[VD]] = None) {
 
-  /**
-   * Within each edge partition, create a local map from vid to an index into the attribute
-   * array. Each map contains a superset of the vertices that it will receive, because it stores
-   * vids from both the source and destination of edges. It must always include both source and
-   * destination vids because some operations, such as GraphImpl.mapReduceTriplets, rely on this.
-   */
-  private val localVertexIdMap: RDD[(Int, VertexIdToIndexMap)] = prevViewOpt match {
-    case Some(prevView) =>
-      prevView.localVertexIdMap
-    case None =>
-      edges.partitionsRDD.mapPartitions(_.map {
-        case (pid, epart) =>
-          val vidToIndex = new VertexIdToIndexMap
-          epart.foreach { e =>
-            vidToIndex.add(e.srcId)
-            vidToIndex.add(e.dstId)
-          }
-          (pid, vidToIndex)
-      }, preservesPartitioning = true).cache().setName("ReplicatedVertexView localVertexIdMap")
-  }
-
   private lazy val bothAttrs: RDD[(PartitionID, VertexPartition[VD])] = create(true, true)
   private lazy val srcAttrOnly: RDD[(PartitionID, VertexPartition[VD])] = create(true, false)
   private lazy val dstAttrOnly: RDD[(PartitionID, VertexPartition[VD])] = create(false, true)
@@ -134,21 +113,21 @@ class ReplicatedVertexView[VD: ClassTag](
       case None =>
         // Within each edge partition, place the shipped vertex attributes into the correct
         // locations specified in localVertexIdMap
-        localVertexIdMap.zipPartitions(shippedVerts) { (mapIter, shippedVertsIter) =>
-          val (pid, vidToIndex) = mapIter.next()
-          assert(!mapIter.hasNext)
-          // Populate the vertex array using the vidToIndex map
-          val vertexArray = vdTag.newArray(vidToIndex.capacity)
+        edges.partitionsRDD.zipPartitions(shippedVerts) { (ePartIter, shippedVertsIter) =>
+          val (pid, ePart) = ePartIter.next()
+          assert(!ePartIter.hasNext)
+          // Populate the vertex array using the vertexIndex
+          val vertexArray = vdTag.newArray(ePart.vertexIndex.capacity)
           for ((_, block) <- shippedVertsIter) {
             for (i <- 0 until block.vids.size) {
               val vid = block.vids(i)
               val attr = block.attrs(i)
-              val ind = vidToIndex.getPos(vid)
+              val ind = ePart.vertexIndex.getPos(vid)
               vertexArray(ind) = attr
             }
           }
           val newVPart = new VertexPartition(
-            vidToIndex, vertexArray, vidToIndex.getBitSet)(vdTag)
+            ePart.vertexIndex, vertexArray, ePart.vertexIndex.getBitSet)(vdTag)
           Iterator((pid, newVPart))
         }.cache().setName("ReplicatedVertexView %s %s".format(includeSrc, includeDst))
     }

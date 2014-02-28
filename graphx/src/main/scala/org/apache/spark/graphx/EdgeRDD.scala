@@ -114,6 +114,8 @@ class EdgeRDD[@specialized ED: ClassTag](
   }
 
   private[graphx] def collectVertexIds(): RDD[VertexId] = {
-    partitionsRDD.flatMap { case (_, p) => Array.concat(p.srcIds, p.dstIds) }
+    partitionsRDD.flatMap {
+      case (_, p) => p.vertexIds
+    }
   }
 }

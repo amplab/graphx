@@ -89,7 +89,7 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     }
       .partitionBy(new HashPartitioner(numPartitions))
       .mapPartitionsWithIndex( { (pid, iter) =>
-        val builder = new EdgePartitionBuilder[ED]()(edTag)
+        val builder = new FreshEdgePartitionBuilder[ED]()(edTag)
         iter.foreach { message =>
           val data = message.data
           builder.add(data._1, data._2, data._3)
@@ -138,8 +138,8 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
         val et = new EdgeTriplet[VD, ED]
         val inputIterator = edgePartition.iterator.map { e =>
           et.set(e)
-          et.srcAttr = vPart(e.srcId)
-          et.dstAttr = vPart(e.dstId)
+          et.srcAttr = vPart.lookup(e.srcLocalVid)
+          et.dstAttr = vPart.lookup(e.dstLocalVid)
           et
         }
         // Apply the user function to the vertex partition
@@ -162,7 +162,8 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     val newEdges = new EdgeRDD[ED](triplets.filter { et =>
       vpred(et.srcId, et.srcAttr) && vpred(et.dstId, et.dstAttr) && epred(et)
     }.mapPartitionsWithIndex( { (pid, iter) =>
-      val builder = new EdgePartitionBuilder[ED]()(edTag)
+      // TODO: Reuse the EdgePartition index and vertexIndex
+      val builder = new FreshEdgePartitionBuilder[ED]()(edTag)
       iter.foreach { et => builder.add(et.srcId, et.dstId, et.attr) }
       val edgePartition = builder.toEdgePartition
       Iterator((pid, edgePartition))
@@ -225,7 +226,7 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
       val edgeIter = activeDirectionOpt match {
         case Some(EdgeDirection.Both) =>
           if (activeFraction < 0.8) {
-            edgePartition.indexIterator(srcVertexId => vPart.isActive(srcVertexId))
+            edgePartition.indexIterator(srcLocalVid => vPart.localVidIsActive(srcLocalVid))
               .filter(e => vPart.isActive(e.dstId))
           } else {
             edgePartition.iterator.filter(e => vPart.isActive(e.srcId) && vPart.isActive(e.dstId))
@@ -236,7 +237,7 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
           edgePartition.iterator.filter(e => vPart.isActive(e.srcId) || vPart.isActive(e.dstId))
         case Some(EdgeDirection.Out) =>
           if (activeFraction < 0.8) {
-            edgePartition.indexIterator(srcVertexId => vPart.isActive(srcVertexId))
+            edgePartition.indexIterator(srcLocalVid => vPart.localVidIsActive(srcLocalVid))
           } else {
             edgePartition.iterator.filter(e => vPart.isActive(e.srcId))
           }
@@ -251,10 +252,10 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
       val mapOutputs = edgeIter.flatMap { e =>
         et.set(e)
         if (mapUsesSrcAttr) {
-          et.srcAttr = vPart(e.srcId)
+          et.srcAttr = vPart.lookup(e.srcLocalVid)
         }
         if (mapUsesDstAttr) {
-          et.dstAttr = vPart(e.dstId)
+          et.dstAttr = vPart.lookup(e.dstLocalVid)
         }
         mapFunc(et)
       }
@@ -364,7 +365,7 @@ object GraphImpl {
   private def createEdgeRDD[ED: ClassTag](
       edges: RDD[Edge[ED]]): EdgeRDD[ED] = {
     val edgePartitions = edges.mapPartitionsWithIndex { (pid, iter) =>
-      val builder = new EdgePartitionBuilder[ED]
+      val builder = new FreshEdgePartitionBuilder[ED]
       iter.foreach { e =>
         builder.add(e.srcId, e.dstId, e.attr)
       }

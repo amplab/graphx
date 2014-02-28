@@ -55,20 +55,20 @@ class RoutingTable(edges: EdgeRDD[_], vertices: VertexRDD[_]) {
       if (includeSrcAttr) {  // Add src vertices to the set.
         var i = 0
         while (i < numEdges) {
-          vSet.add(edgePartition.srcIds(i))
+          vSet.add(edgePartition.srcVidAt(i))
           i += 1
         }
       }
       if (includeDstAttr) {  // Add dst vertices to the set.
       var i = 0
         while (i < numEdges) {
-          vSet.add(edgePartition.dstIds(i))
+          vSet.add(edgePartition.dstVidAt(i))
           i += 1
         }
       }
       vSet.iterator.map { vid => (vid, pid) }
     }
-
+    // TODO: Map-side aggregation
     val numPartitions = vertices.partitions.size
     vid2pid.partitionBy(vertices.partitioner.get).mapPartitions { iter =>
       val pid2vid = Array.fill(numPartitions)(new PrimitiveVector[VertexId])

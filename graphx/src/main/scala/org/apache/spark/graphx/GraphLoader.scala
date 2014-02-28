@@ -18,7 +18,7 @@
 package org.apache.spark.graphx
 
 import org.apache.spark.{Logging, SparkContext}
-import org.apache.spark.graphx.impl.{EdgePartitionBuilder, GraphImpl}
+import org.apache.spark.graphx.impl.{FreshEdgePartitionBuilder, GraphImpl}
 
 /**
  * Provides utilities for loading [[Graph]]s from files.
@@ -61,7 +61,7 @@ object GraphLoader extends Logging {
 
     // Parse the edge data table directly into edge partitions
     val edges = sc.textFile(path, minEdgePartitions).mapPartitionsWithIndex { (pid, iter) =>
-      val builder = new EdgePartitionBuilder[Int]
+      val builder = new FreshEdgePartitionBuilder[Int]
       iter.foreach { line =>
         if (!line.isEmpty && line(0) != '#') {
           val lineArray = line.split("\\s+")
