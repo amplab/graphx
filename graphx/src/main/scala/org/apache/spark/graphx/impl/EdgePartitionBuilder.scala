@@ -17,7 +17,7 @@
 
 package org.apache.spark.graphx.impl
 
-import scala.reflect.ClassTag
+import scala.reflect.{ClassTag, classTag}
 import scala.util.Sorting
 
 import org.apache.spark.graphx._
@@ -40,8 +40,10 @@ object EdgePartitionBuilder {
 }
 
 private[graphx]
-abstract class EdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag] {
+trait EdgePartitionBuilder[@specialized(Long, Int, Double) ED] {
   def toEdgePartition: EdgePartition[ED]
+
+  implicit val edTag: ClassTag[ED]
 
   protected def toEdgePartitionHelper(
       edgeArray: Array[LocalEdge[ED]], vertexIndex: VertexIdToIndexMap): EdgePartition[ED] = {
@@ -78,7 +80,18 @@ private[graphx]
 class ExistingEdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag](
     vertexIndex: VertexIdToIndexMap, size: Int = 64) extends EdgePartitionBuilder[ED] {
 
-  var edges = new PrimitiveVector[LocalEdge[ED]](size)
+  override val edTag: ClassTag[ED] = classTag[ED]
+
+  var edges: PrimitiveVector[LocalEdge[ED]] = null
+  init(null.asInstanceOf[ED])
+
+  /**
+   * Works around a Scala compiler bug:
+   * http://axel22.github.io/2013/11/03/specialization-quirks.html#initialize_specialized_values_outside_constructor_body
+   */
+  private def init(dummyEdge: ED) {
+    edges = new PrimitiveVector[LocalEdge[ED]](size)
+  }
 
   /** Add a new edge to the partition using its local vids. */
   def add(srcLocalVid: Int, dstLocalVid: Int, d: ED) {
@@ -97,9 +110,20 @@ private[graphx]
 class FreshEdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag](
     size: Int = 64) extends EdgePartitionBuilder[ED] {
 
-  private val vertexIndex: VertexIdToIndexMap = new VertexIdToIndexMap
+  override val edTag: ClassTag[ED] = classTag[ED]
 
-  var edges = new PrimitiveVector[Edge[ED]](size)
+  private var vertexIndex: VertexIdToIndexMap = null
+  var edges: PrimitiveVector[Edge[ED]] = null
+  init(null.asInstanceOf[ED])
+
+  /**
+   * Works around a Scala compiler bug:
+   * http://axel22.github.io/2013/11/03/specialization-quirks.html#initialize_specialized_values_outside_constructor_body
+   */
+  private def init(dummyEdge: ED) {
+    vertexIndex = new VertexIdToIndexMap
+    edges = new PrimitiveVector[Edge[ED]](size)
+  }
 
   /** Add a new edge to the partition. */
   def add(src: VertexId, dst: VertexId, d: ED) {
