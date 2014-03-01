@@ -40,7 +40,7 @@ object EdgePartitionBuilder {
 }
 
 private[graphx]
-abstract class EdgePartitionBuilder[/*@specialized(Long, Int, Double)*/ ED: ClassTag] {
+abstract class EdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag] {
   def toEdgePartition: EdgePartition[ED]
 
   protected def toEdgePartitionHelper(
@@ -75,7 +75,7 @@ abstract class EdgePartitionBuilder[/*@specialized(Long, Int, Double)*/ ED: Clas
  * Creates an EdgePartition from an existing vertexIndex.
  */
 private[graphx]
-class ExistingEdgePartitionBuilder[/*@specialized(Long, Int, Double)*/ ED: ClassTag](
+class ExistingEdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag](
     vertexIndex: VertexIdToIndexMap, size: Int = 64) extends EdgePartitionBuilder[ED] {
 
   var edges = new PrimitiveVector[LocalEdge[ED]](size)
@@ -94,7 +94,7 @@ class ExistingEdgePartitionBuilder[/*@specialized(Long, Int, Double)*/ ED: Class
  * Creates an EdgePartition from scratch.
  */
 private[graphx]
-class FreshEdgePartitionBuilder[/*@specialized(Long, Int, Double)*/ ED: ClassTag](
+class FreshEdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag](
     size: Int = 64) extends EdgePartitionBuilder[ED] {
 
   private val vertexIndex: VertexIdToIndexMap = new VertexIdToIndexMap
