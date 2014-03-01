@@ -24,12 +24,9 @@ import org.apache.spark.graphx._
 import org.apache.spark.graphx.util.collection.PrimitiveKeyOpenHashMap
 import org.apache.spark.util.collection.PrimitiveVector
 
-private[graphx]
-case class LocalEdge[ED](val srcLocalVid: Int, val dstLocalVid: Int, val attr: ED)
-
 object EdgePartitionBuilder {
-  private[graphx] def lexicographicOrdering[ED] = new Ordering[LocalEdge[ED]] {
-    override def compare(a: LocalEdge[ED], b: LocalEdge[ED]): Int = {
+  private[graphx] def lexicographicOrdering[ED] = new Ordering[Edge[ED]] {
+    override def compare(a: Edge[ED], b: Edge[ED]): Int = {
       if (a.srcLocalVid != b.srcLocalVid) {
         a.srcLocalVid - b.srcLocalVid
       } else {
@@ -40,13 +37,54 @@ object EdgePartitionBuilder {
 }
 
 private[graphx]
-trait EdgePartitionBuilder[@specialized(Long, Int, Double) ED] {
-  def toEdgePartition: EdgePartition[ED]
+class EdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag](
+    size: Int = 64, var vertexIndex: Option[VertexIdToIndexMap] = None) {
 
-  implicit val edTag: ClassTag[ED]
+  var _vertexIndex: VertexIdToIndexMap = null
+  var edges: PrimitiveVector[Edge[ED]] = null
+  init(null.asInstanceOf[ED])
+
+  /**
+   * Works around a Scala compiler bug:
+   * http://axel22.github.io/2013/11/03/specialization-quirks.html#initialize_specialized_values_outside_constructor_body
+   */
+  private def init(dummyEdge: ED) {
+    edges = new PrimitiveVector[Edge[ED]](size)
+    _vertexIndex = vertexIndex.getOrElse(new VertexIdToIndexMap)
+  }
+
+  /** Add a new edge to the partition. */
+  def add(src: VertexId, dst: VertexId, d: ED) {
+    _vertexIndex.add(src)
+    _vertexIndex.add(dst)
+    edges += Edge(src, dst, d)
+  }
+
+  /** Add a new edge to the partition using its local vids. */
+  def addLocal(srcLocalVid: Int, dstLocalVid: Int, d: ED) {
+    val e = Edge(attr = d)
+    e.srcLocalVid = srcLocalVid
+    e.dstLocalVid = dstLocalVid
+    edges += e
+  }
+
+  def toEdgePartition: EdgePartition[ED] = {
+    if (vertexIndex.nonEmpty) {
+      toEdgePartitionHelper(edges.trim().array, _vertexIndex)
+    } else {
+      val localEdges = edges.trim().array
+      var i = 0
+      while (i < localEdges.length) {
+        localEdges(i).srcLocalVid = _vertexIndex.getPos(localEdges(i).srcId)
+        localEdges(i).dstLocalVid = _vertexIndex.getPos(localEdges(i).dstId)
+        i += 1
+      }
+      toEdgePartitionHelper(localEdges, _vertexIndex)
+    }
+  }
 
   protected def toEdgePartitionHelper(
-      edgeArray: Array[LocalEdge[ED]], vertexIndex: VertexIdToIndexMap): EdgePartition[ED] = {
+      edgeArray: Array[Edge[ED]], vertexIndex: VertexIdToIndexMap): EdgePartition[ED] = {
     Sorting.quickSort(edgeArray)(EdgePartitionBuilder.lexicographicOrdering[ED])
     val srcIds = new Array[Int](edgeArray.size)
     val dstIds = new Array[Int](edgeArray.size)
@@ -70,71 +108,5 @@ trait EdgePartitionBuilder[@specialized(Long, Int, Double) ED] {
       }
     }
     new EdgePartition(srcIds, dstIds, data, index, vertexIndex)
-  }
-}
-
-/**
- * Creates an EdgePartition from an existing vertexIndex.
- */
-private[graphx]
-class ExistingEdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag](
-    vertexIndex: VertexIdToIndexMap, size: Int = 64) extends EdgePartitionBuilder[ED] {
-
-  override val edTag: ClassTag[ED] = classTag[ED]
-
-  var edges: PrimitiveVector[LocalEdge[ED]] = null
-  init(null.asInstanceOf[ED])
-
-  /**
-   * Works around a Scala compiler bug:
-   * http://axel22.github.io/2013/11/03/specialization-quirks.html#initialize_specialized_values_outside_constructor_body
-   */
-  private def init(dummyEdge: ED) {
-    edges = new PrimitiveVector[LocalEdge[ED]](size)
-  }
-
-  /** Add a new edge to the partition using its local vids. */
-  def add(srcLocalVid: Int, dstLocalVid: Int, d: ED) {
-    edges += LocalEdge(srcLocalVid, dstLocalVid, d)
-  }
-
-  def toEdgePartition: EdgePartition[ED] = {
-    toEdgePartitionHelper(edges.trim().array, vertexIndex)
-  }
-}
-
-/**
- * Creates an EdgePartition from scratch.
- */
-private[graphx]
-class FreshEdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag](
-    size: Int = 64) extends EdgePartitionBuilder[ED] {
-
-  override val edTag: ClassTag[ED] = classTag[ED]
-
-  private var vertexIndex: VertexIdToIndexMap = null
-  var edges: PrimitiveVector[Edge[ED]] = null
-  init(null.asInstanceOf[ED])
-
-  /**
-   * Works around a Scala compiler bug:
-   * http://axel22.github.io/2013/11/03/specialization-quirks.html#initialize_specialized_values_outside_constructor_body
-   */
-  private def init(dummyEdge: ED) {
-    vertexIndex = new VertexIdToIndexMap
-    edges = new PrimitiveVector[Edge[ED]](size)
-  }
-
-  /** Add a new edge to the partition. */
-  def add(src: VertexId, dst: VertexId, d: ED) {
-    vertexIndex.add(src)
-    vertexIndex.add(dst)
-    edges += Edge(src, dst, d)
-  }
-
-  def toEdgePartition: EdgePartition[ED] = {
-    val localEdges = edges.trim().array.map(e =>
-      LocalEdge(vertexIndex.getPos(e.srcId), vertexIndex.getPos(e.dstId), e.attr))
-    toEdgePartitionHelper(localEdges, vertexIndex)
   }
 }

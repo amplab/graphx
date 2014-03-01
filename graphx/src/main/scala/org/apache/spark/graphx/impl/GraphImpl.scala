@@ -89,7 +89,7 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     }
       .partitionBy(new HashPartitioner(numPartitions))
       .mapPartitionsWithIndex( { (pid, iter) =>
-        val builder = new FreshEdgePartitionBuilder[ED]()(edTag)
+        val builder = new EdgePartitionBuilder[ED]()(edTag)
         iter.foreach { message =>
           val data = message.data
           builder.add(data._1, data._2, data._3)
@@ -163,7 +163,7 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
       vpred(et.srcId, et.srcAttr) && vpred(et.dstId, et.dstAttr) && epred(et)
     }.mapPartitionsWithIndex( { (pid, iter) =>
       // TODO: Reuse the EdgePartition index and vertexIndex
-      val builder = new FreshEdgePartitionBuilder[ED]()(edTag)
+      val builder = new EdgePartitionBuilder[ED]()(edTag)
       iter.foreach { et => builder.add(et.srcId, et.dstId, et.attr) }
       val edgePartition = builder.toEdgePartition
       Iterator((pid, edgePartition))
@@ -365,7 +365,7 @@ object GraphImpl {
   private def createEdgeRDD[ED: ClassTag](
       edges: RDD[Edge[ED]]): EdgeRDD[ED] = {
     val edgePartitions = edges.mapPartitionsWithIndex { (pid, iter) =>
-      val builder = new FreshEdgePartitionBuilder[ED]
+      val builder = new EdgePartitionBuilder[ED]
       iter.foreach { e =>
         builder.add(e.srcId, e.dstId, e.attr)
       }

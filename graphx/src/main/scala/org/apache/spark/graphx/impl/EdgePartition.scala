@@ -52,9 +52,9 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
    * @return a new edge partition with all edges reversed.
    */
   def reverse: EdgePartition[ED] = {
-    val builder = new ExistingEdgePartitionBuilder(vertexIndex, size)
+    val builder = new EdgePartitionBuilder(size, Some(vertexIndex))
     for (e <- iterator) {
-      builder.add(e.dstLocalVid, e.srcLocalVid, e.attr)
+      builder.addLocal(e.dstLocalVid, e.srcLocalVid, e.attr)
     }
     builder.toEdgePartition
   }
@@ -119,7 +119,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
    * @return a new edge partition without duplicate edges
    */
   def groupEdges(merge: (ED, ED) => ED): EdgePartition[ED] = {
-    val builder = new ExistingEdgePartitionBuilder[ED](vertexIndex)
+    val builder = new EdgePartitionBuilder[ED](vertexIndex = Some(vertexIndex))
     var currSrcId: Int = -1
     var currDstId: Int = -1
     var currAttr: ED = null.asInstanceOf[ED]
@@ -129,7 +129,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
         currAttr = merge(currAttr, data(i))
       } else {
         if (i > 0) {
-          builder.add(currSrcId, currDstId, currAttr)
+          builder.addLocal(currSrcId, currDstId, currAttr)
         }
         currSrcId = srcIds(i)
         currDstId = dstIds(i)
@@ -138,7 +138,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
       i += 1
     }
     if (size > 0) {
-      builder.add(currSrcId, currDstId, currAttr)
+      builder.addLocal(currSrcId, currDstId, currAttr)
     }
     builder.toEdgePartition
   }
@@ -156,7 +156,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
   def innerJoin[ED2: ClassTag, ED3: ClassTag]
       (other: EdgePartition[ED2])
       (f: (VertexId, VertexId, ED, ED2) => ED3): EdgePartition[ED3] = {
-    val builder = new ExistingEdgePartitionBuilder[ED3](vertexIndex)
+    val builder = new EdgePartitionBuilder[ED3](vertexIndex = Some(vertexIndex))
     var i = 0
     var j = 0
     // For i = index of each edge in `this`...
@@ -171,7 +171,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
           // ... run `f` on the matching edge
           val srcVid = lookup(srcId)
           val dstVid = lookup(dstId)
-          builder.add(srcId, dstId, f(srcVid, dstVid, this.data(i), other.data(j)))
+          builder.addLocal(srcId, dstId, f(srcVid, dstVid, this.data(i), other.data(j)))
         }
       }
       i += 1
