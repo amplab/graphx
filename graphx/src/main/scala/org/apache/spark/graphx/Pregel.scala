@@ -145,9 +145,8 @@ object Pregel {
       activeMessages = messages.count()
 
       // Very ugly code to clear the in-memory shuffle data
-      messages.mapPartitions { iter =>
+      messages.foreachPartition { iter =>
         SparkEnv.get.blockManager.shuffleBlockManager.removeAllShuffleStuff()
-        iter
       }
 
       // Unpersist the RDDs hidden by newly-materialized RDDs
