@@ -60,7 +60,9 @@ object GraphLoader extends Logging {
     val startTime = System.currentTimeMillis
 
     // Parse the edge data table directly into edge partitions
-    val edges = sc.textFile(path, minEdgePartitions).mapPartitionsWithIndex { (pid, iter) =>
+    val file = sc.textFile(path, minEdgePartitions).cache()
+    file.count()
+    val edges = file.mapPartitionsWithIndex { (pid, iter) =>
       val builder = new EdgePartitionBuilder[Int]
       iter.foreach { line =>
         if (!line.isEmpty && line(0) != '#') {
