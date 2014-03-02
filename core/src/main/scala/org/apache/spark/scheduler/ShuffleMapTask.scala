@@ -28,6 +28,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.rdd.RDDCheckpointData
 import org.apache.spark.storage._
 import org.apache.spark.util.{MetadataCleaner, MetadataCleanerType, TimeStampedHashMap}
+import java.nio.ByteBuffer
 
 private[spark] object ShuffleMapTask {
 
@@ -167,7 +168,11 @@ private[spark] class ShuffleMapTask(
       var totalBytes = 0L
       var totalTime = 0L
       val compressedSizes: Array[Byte] = shuffle.writers.map { writer: BlockObjectWriter =>
-        writer.commit()
+        // writer.commit()
+        val bytes = writer.commit()
+        if (bytes != null) {
+          blockManager.putBytes(writer.blockId, ByteBuffer.wrap(bytes), StorageLevel.MEMORY_ONLY_SER, tellMaster = false)
+        }
         writer.close()
         val size = writer.fileSegment().length
         totalBytes += size
