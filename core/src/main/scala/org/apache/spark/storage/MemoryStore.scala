@@ -23,6 +23,7 @@ import java.util.LinkedHashMap
 import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.util.{SizeEstimator, Utils}
+import org.apache.spark.serializer.Serializer
 
 /**
  * Stores blocks in memory, either as ArrayBuffers of deserialized Java objects or as
@@ -107,6 +108,14 @@ private class MemoryStore(blockManager: BlockManager, maxMemory: Long)
       val buffer = entry.value.asInstanceOf[ByteBuffer].duplicate() // Doesn't actually copy data
       Some(blockManager.dataDeserialize(blockId, buffer))
     }
+  }
+
+  /**
+   * A version of getValues that allows a custom serializer. This is used as part of the
+   * shuffle short-circuit code.
+   */
+  def getValues(blockId: BlockId, serializer: Serializer): Option[Iterator[Any]] = {
+    getBytes(blockId).map(bytes => blockManager.dataDeserialize(blockId, bytes, serializer))
   }
 
   override def remove(blockId: BlockId): Boolean = {

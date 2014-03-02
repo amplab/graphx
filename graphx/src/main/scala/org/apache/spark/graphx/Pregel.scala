@@ -18,6 +18,7 @@
 package org.apache.spark.graphx
 
 import scala.reflect.ClassTag
+import org.apache.spark.SparkEnv
 
 
 /**
@@ -142,6 +143,12 @@ object Pregel {
       // hides oldMessages (depended on by newVerts), newVerts (depended on by messages), and the
       // vertices of prevG (depended on by newVerts, oldMessages, and the vertices of g).
       activeMessages = messages.count()
+
+      // Very ugly code to clear the in-memory shuffle data
+      messages.foreachPartition { iter =>
+        SparkEnv.get.blockManager.shuffleBlockManager.removeAllShuffleStuff()
+      }
+
       // Unpersist the RDDs hidden by newly-materialized RDDs
       oldMessages.unpersist(blocking=false)
       newVerts.unpersist(blocking=false)
