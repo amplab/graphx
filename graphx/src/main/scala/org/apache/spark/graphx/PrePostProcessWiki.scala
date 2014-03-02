@@ -139,35 +139,28 @@ object PrePostProcessWikipedia extends Logging {
       .map(t => t._2.toString)
     // xmlRDD.count
     logWarning(s"XML RDD counted. Found ${xmlRDD.count} raw articles.")
+    val repartXMLRDD = xmlRDD.repartition(128)
+    logWarning(s"XML RDD repartitioned. Found ${repartXMLRDD.count} raw articles.")
 
-    val allArtsRDD = xmlRDD.map { raw => new WikiArticle(raw) }.cache
-    // val numRedirects = allArtsRDD.filter { art => art.redirect }.count
-    // val numStubs = allArtsRDD.filter { art => art.stub }.count
-    // val numDisambig = allArtsRDD.filter { art => art.disambig }.count
-    // val numTitleNotFound = allArtsRDD.filter { art => art.title == WikiArticle.notFoundString }.count
-    // logWarning(s"Filter results:\tRedirects: $numRedirects \tStubs: $numStubs \tDisambiguations: $numDisambig \t Title not found: $numTitleNotFound")
+    val allArtsRDD = repartXMLRDD.map { raw => new WikiArticle(raw) }.cache
+    logWarning(s"Total articles: Found ${allArtsRDD.count} UNPARTITIONED articles.")
  
     val wikiRDD = allArtsRDD.filter { art => art.relevant }.cache //.repartition(128)
-    wikiRDD.repartition(128)
+    logWarning(s"wikiRDD counted. Found ${wikiRDD.count} relevant articles in ${wikiRDD.partitions.size} partitions")
+
+
+    // val repartAllArtsRDD = allArtsRDD.repartition(128)
+    // logWarning(s"Total articles: Found ${repartAllArtsRDD.count} PARTITIONED articles.")
+    // val wikiRDD = unpartWikiRDD.repartition(128).cache
+    // val wikiRDD = unpartWikiRDD.coalesce(128, false).cache
+    // logWarning(s"WikiRDD partitions size: ${wikiRDD.partitions.size}")
+
     // val wikiRDD = allArtsRDD.filter { art => art.relevant }.repartition(128)
-    val wikiRDDCount = wikiRDD.count
-    logWarning(s"wikiRDD counted. Found ${wikiRDDCount} relevant articles.")
+
+    // val wikiRDDCount = wikiRDD.count
+    // logWarning(s"wikiRDD counted. Found ${wikiRDDCount} relevant articles.")
     // logWarning("Counting differently")
 
-    // count: redirects, stubs, disambigs, titlenotfound, titlenull, relevant, total
-//     val zeroCount = new TrackCounts
-//     val countSeqOp = (curCount: TrackCounts, art: WikiArticle) => {
-//       curCount.addArticle(art)
-//       curCount
-//     }
-//     val countCombOp = (c1: TrackCounts, c2: TrackCounts) => {
-//       c1.update(c2)
-//       c1
-//     }
-//
-//     val cr = allArtsRDD.aggregate(zeroCount)(countSeqOp, countCombOp)
-//     logWarning(s"Different count results: $cr")
-//     System.exit(0)
 
     val vertices: RDD[(VertexId, String)] = wikiRDD.map { art => (art.vertexID, art.title) }
     val edges: RDD[Edge[Double]] = wikiRDD.flatMap { art => art.edges }
@@ -179,11 +172,6 @@ object PrePostProcessWikipedia extends Logging {
     val resultG = pagerankConnComponentsAlt(numIters, cleanG)
     logWarning(s"ORIGINAL graph has ${cleanG.triplets.count()} EDGES, ${cleanG.vertices.count()} VERTICES")
     logWarning(s"FINAL graph has ${resultG.triplets.count()} EDGES, ${resultG.vertices.count()} VERTICES")
-//     val pr = PageRank.run(g, 20)
-//     val prAndTitle = g
-//       .outerJoinVertices(pr)({(id: VertexId, title: String, rank: Option[Double]) => (title, rank.getOrElse(0.0))})
-//     val top20 = prAndTitle.vertices.top(20)(Ordering.by((entry: (VertexId, (String, Double))) => entry._2._2))
-//     top20.mkString("\n")
 
   }
 

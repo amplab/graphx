@@ -14,12 +14,12 @@ import java.nio.ByteBuffer
 
 
 class WikiArticle(wtext: String) extends Serializable {
-  @transient val links: Array[String] = WikiArticle.parseLinks(wtext)
-  @transient val neighbors = links.map(WikiArticle.titleHash).distinct
-  @transient lazy val redirect: Boolean = !WikiArticle.redirectPattern.findFirstIn(wtext).isEmpty
-  @transient lazy val stub: Boolean = !WikiArticle.stubPattern.findFirstIn(wtext).isEmpty
-  @transient lazy val disambig: Boolean = !WikiArticle.disambigPattern.findFirstIn(wtext).isEmpty
-  @transient lazy val tiXML = WikiArticle.titlePattern.findFirstIn(wtext).getOrElse("")
+  val links: Array[String] = WikiArticle.parseLinks(wtext)
+  val neighbors = links.map(WikiArticle.titleHash).distinct
+  val redirect: Boolean = !WikiArticle.redirectPattern.findFirstIn(wtext).isEmpty
+  val stub: Boolean = !WikiArticle.stubPattern.findFirstIn(wtext).isEmpty
+  val disambig: Boolean = !WikiArticle.disambigPattern.findFirstIn(wtext).isEmpty
+  val tiXML = WikiArticle.titlePattern.findFirstIn(wtext).getOrElse("")
   val title: String = {
     try {
       XML.loadString(tiXML).text
@@ -42,11 +42,11 @@ class WikiArticle(wtext: String) extends Serializable {
 }
 
 object WikiArticle {
-  @transient val titlePattern = "<title>(.*)<\\/title>".r
-  @transient val redirectPattern = "#REDIRECT\\s+\\[\\[(.*?)\\]\\]".r
-  @transient val disambigPattern = "\\{\\{disambig\\}\\}".r
-  @transient val stubPattern = "\\-stub\\}\\}".r
-  @transient val linkPattern = Pattern.compile("\\[\\[(.*?)\\]\\]", Pattern.MULTILINE) 
+  val titlePattern = "<title>(.*)<\\/title>".r
+  val redirectPattern = "#REDIRECT\\s+\\[\\[(.*?)\\]\\]".r
+  val disambigPattern = "\\{\\{disambig\\}\\}".r
+  val stubPattern = "\\-stub\\}\\}".r
+  val linkPattern = Pattern.compile("\\[\\[(.*?)\\]\\]", Pattern.MULTILINE) 
 
   val notFoundString = "NOTFOUND"
 
