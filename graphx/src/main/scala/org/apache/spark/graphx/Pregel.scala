@@ -18,6 +18,7 @@
 package org.apache.spark.graphx
 
 import scala.reflect.ClassTag
+import org.apache.spark.Logging
 
 
 /**
@@ -52,7 +53,7 @@ import scala.reflect.ClassTag
  * }}}
  *
  */
-object Pregel {
+object Pregel extends Logging {
 
   /**
    * Execute a Pregel-like iterative vertex-parallel abstraction.  The
@@ -123,7 +124,7 @@ object Pregel {
     var messages = g.mapReduceTriplets(sendMsg, mergeMsg)
     var activeMessages = messages.count()
     // Loop
-    var prevG: Graph[VD, ED] = null
+    var prevG: Graph[VD, ED] = null.asInstanceOf[Graph[VD, ED]]
     var i = 0
     while (activeMessages > 0 && i < maxIterations) {
       // Receive the messages. Vertices that didn't get any messages do not appear in newVerts.

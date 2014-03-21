@@ -23,6 +23,7 @@ import java.util.Date
 import org.apache.hadoop.conf.{Configurable, Configuration}
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.mapreduce._
+import org.apache.mahout.text.wikipedia.XmlInputFormat
 
 import org.apache.spark.{InterruptibleIterator, Logging, Partition, SerializableWritable, SparkContext, TaskContext}
 

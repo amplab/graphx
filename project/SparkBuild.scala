@@ -316,6 +316,10 @@ object SparkBuild extends Build {
         "com.twitter"               %% "chill"            % "0.3.1" excludeAll(excludeAsm),
         "com.twitter"                % "chill-java"       % "0.3.1" excludeAll(excludeAsm),
         "com.clearspring.analytics"  % "stream"           % "2.5.1"
+        // Added for GraphX benchmarking
+        "org.apache.hbase"     %  "hbase"           % "0.94.6" excludeAll(excludeNetty, excludeAsm),
+        "org.apache.hbase" % "hbase" % HBASE_VERSION excludeAll(excludeNetty, excludeAsm),
+        "org.apache.mahout"          % "mahout-integration" % "0.8",
       ),
     libraryDependencies ++= maybeAvro
   )
@@ -336,6 +340,7 @@ object SparkBuild extends Build {
     libraryDependencies ++= Seq(
       "com.twitter"          %% "algebird-core"   % "0.1.11",
       "org.apache.hbase" % "hbase" % HBASE_VERSION excludeAll(excludeNetty, excludeAsm, excludeOldAsm, excludeCommonsLogging),
+      "org.apache.mahout" % "mahout-integration" % "0.8", // added for GraphX benchmarking
       "org.apache.cassandra" % "cassandra-all" % "1.2.6"
         exclude("com.google.guava", "guava")
         exclude("com.googlecode.concurrentlinkedhashmap", "concurrentlinkedhashmap-lru")

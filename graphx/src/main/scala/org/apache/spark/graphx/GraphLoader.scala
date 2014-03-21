@@ -19,6 +19,7 @@ package org.apache.spark.graphx
 
 import org.apache.spark.{Logging, SparkContext}
 import org.apache.spark.graphx.impl.{EdgePartitionBuilder, GraphImpl}
+import org.apache.spark.rdd.RDD
 
 /**
  * Provides utilities for loading [[Graph]]s from files.
@@ -85,5 +86,21 @@ object GraphLoader extends Logging {
 
     GraphImpl.fromEdgePartitions(edges, defaultVertexAttr = 1)
   } // end of edgeListFile
+
+  def loadVertices(sc: SparkContext, vertexPath: String): RDD[(VertexId, String)] = {
+
+    val vertices = sc.textFile(vertexPath, 128).mapPartitions( iter =>
+      iter.filter(line => !line.isEmpty && line(0) != '#').map { line =>
+        val lineArray = line.split("\\s+")
+        if(lineArray.length < 2) {
+          println("Invalid line: " + line)
+          assert(false)
+        }
+        val id = lineArray(0).trim.toLong
+        val attr = lineArray.slice(1,lineArray.length).mkString(" ")
+        (id, attr)
+      })
+    vertices
+  }
 
 }

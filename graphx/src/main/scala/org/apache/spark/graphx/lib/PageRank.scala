@@ -100,6 +100,7 @@ object PageRank extends Logging {
     // The initial message received by all vertices in PageRank
     val initialMessage = 0.0
 
+    logWarning("About to execute Pregel.")
     // Execute pregel for a fixed number of iterations.
     Pregel(pagerankGraph, initialMessage, numIter, activeDirection = EdgeDirection.Out)(
       vertexProgram, sendMessage, messageCombiner)
