@@ -232,6 +232,22 @@ class VertexPartition[@specialized(Long, Int, Double) VD: ClassTag](
     new VertexPartition(index, newValues, newMask)
   }
 
+  /**
+   * Similar to innerJoin, but vertices from the left side that don't appear in iter will remain in
+   * the partition, hidden by the bitmask.
+   */
+  def innerJoinKeepLeftDestructive(iter: Iterator[Product2[VertexId, VD]]): VertexPartition[VD] = {
+    val newMask = new BitSet(capacity)
+    iter.foreach { case (vid, vdata) =>
+      val pos = index.getPos(vid)
+      if (pos >= 0) {
+        newMask.set(pos)
+        values(pos) = vdata
+      }
+    }
+    new VertexPartition(index, values, newMask)
+  }
+
   def aggregateUsingIndex[VD2: ClassTag](
       iter: Iterator[Product2[VertexId, VD2]],
       reduceFunc: (VD2, VD2) => VD2): VertexPartition[VD2] = {

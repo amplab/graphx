@@ -127,7 +127,7 @@ class ReplicatedVertexView[VD: ClassTag](
         prevView.get(includeSrc, includeDst).zipPartitions(shippedVerts) {
           (prevViewIter, shippedVertsIter) =>
             val (pid, prevVPart) = prevViewIter.next()
-            val newVPart = prevVPart.innerJoinKeepLeft(shippedVertsIter.flatMap(_._2.iterator))
+            val newVPart = prevVPart.innerJoinKeepLeftDestructive(shippedVertsIter.flatMap(_._2.iterator))
             Iterator((pid, newVPart))
         }.cache().setName("ReplicatedVertexView delta %s %s".format(includeSrc, includeDst))
 
