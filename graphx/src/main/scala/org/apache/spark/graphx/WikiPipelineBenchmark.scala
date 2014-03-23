@@ -10,49 +10,9 @@ import org.apache.mahout.text.wikipedia._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkContext._
 import org.apache.spark.Logging
-// import scala.collection.mutable
 import java.util.{HashSet => JHashSet, TreeSet => JTreeSet}
-// import org.apache.spark.graphx.MakeString
 
-class TrackCounts extends Serializable {
-
-  var red: Long = 0
-  var stub: Long = 0
-  var disambig: Long = 0
-  var notFound: Long = 0
-  var titleNull: Long = 0
-  var relevant: Long = 0
-  var total: Long = 0
-
-  def update(o: TrackCounts) {
-    red += o.red
-    stub += o.stub
-    disambig += o.disambig
-    notFound += o.notFound
-    titleNull += o.titleNull
-    relevant += o.relevant
-    total += o.total
-  }
-
-  def addArticle(art: WikiArticle) {
-    if (art.redirect) red += 1
-    if (art.stub) stub += 1
-    if (art.disambig) disambig += 1
-    if (art.title == WikiArticle.notFoundString) notFound += 1
-    if (art.title == null) titleNull += 1
-    if (art.relevant) relevant += 1
-    total += 1
-  }
-
-  override def toString: String = {
-    s"Redirects: $red, Stubs: $stub, Disambig: $disambig, Not Found: $notFound, Null: $titleNull, RELEVANT: $relevant, TOTAL: $total"
-
-  }
-
-}
-
-
-object PrePostProcessWikipedia extends Logging {
+object WikiPipelineBenchmark extends Logging {
 
 
   def main(args: Array[String]) = {
@@ -126,6 +86,28 @@ object PrePostProcessWikipedia extends Logging {
     val prToSave = pr.vertices.map {v => v._1 + "\t"+ v._2}
     prToSave.saveAsTextFile(rankPath)
   }
+
+//   def extractLinkGraph(sc: SparkContext, rawData: String): (RDD[(VertexId, String)], RDD[Edge[Double]]) = {
+//     val conf = new Configuration
+//     conf.set("key.value.separator.in.input.line", " ")
+//     conf.set("xmlinput.start", "<page>")
+//     conf.set("xmlinput.end", "</page>")
+//
+//     logWarning("about to load xml rdd")
+//     val xmlRDD = sc.newAPIHadoopFile(rawData, classOf[XmlInputFormat], classOf[LongWritable], classOf[Text], conf)
+//       .map(t => t._2.toString)
+//     // xmlRDD.count
+//     logWarning(s"XML RDD counted. Found ${xmlRDD.count} raw articles.")
+//     val repartXMLRDD = xmlRDD.repartition(128)
+//     logWarning(s"XML RDD repartitioned. Found ${repartXMLRDD.count} raw articles.")
+//
+//     val allArtsRDD = repartXMLRDD.map { raw => new WikiArticle(raw) }.cache
+//     logWarning(s"Total articles: Found ${allArtsRDD.count} UNPARTITIONED articles.")
+//  
+//     val wikiRDD = allArtsRDD.filter { art => art.relevant }.cache //.repartition(128)
+//     logWarning(s"wikiRDD counted. Found ${wikiRDD.count} relevant articles in ${wikiRDD.partitions.size} partitions")
+//
+//   }
 
   def benchmarkGraphx(sc: SparkContext, rawData: String, numIters: Int) {
 
