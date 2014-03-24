@@ -87,11 +87,11 @@ object GraphLoader extends Logging {
     GraphImpl.fromEdgePartitions(edges, defaultVertexAttr = 1)
   } // end of edgeListFile
 
-  def loadVertices(sc: SparkContext, vertexPath: String): RDD[(VertexId, String)] = {
+  def loadVertices(sc: SparkContext, vertexPath: String, delimiter: String = "\\s+"): RDD[(VertexId, String)] = {
 
     val vertices = sc.textFile(vertexPath, 128).mapPartitions( iter =>
       iter.filter(line => !line.isEmpty && line(0) != '#').map { line =>
-        val lineArray = line.split("\\s+")
+        val lineArray = line.split(delimiter)
         if(lineArray.length < 2) {
           println("Invalid line: " + line)
           assert(false)

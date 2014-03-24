@@ -37,8 +37,10 @@ object WikiPipelineBenchmark extends Logging {
        val rawData = args(2)
        val outBase = args(3)
        val (vertices, edges) = extractLinkGraph(sc, rawData)
-       val rawEdges = edges.map(e => (e.srcId, e.dstId))
-       writeGraphAsText(outBase, vertices, rawEdges, 0)
+       val g = Graph(vertices, edges)
+       val cleanG = g.subgraph(x => true, (vid, vd) => vd != null).cache
+       val rawEdges = cleanG.edges.map(e => (e.srcId, e.dstId))
+       writeGraphAsText(outBase, cleanG.vertices, rawEdges, 0)
      }
 
      case "analyze" => {
@@ -113,9 +115,11 @@ object WikiPipelineBenchmark extends Logging {
   def writeGraphAsText[V](basePath: String,
                           vertices: RDD[(VertexId, V)],
                           edges: RDD[(VertexId, VertexId)],
+                          // graph: Graph[V, _],
                           iter: Int = 0) {
     val verticesToSave = vertices.map {v => s"${v._1}\t${v._2}"}
     val edgesToSave = edges.map {e => s"${e._1}\t${e._2}"}
+    logWarning(s"Writing ${verticesToSave.count} VERTICES, ${edgesToSave.count} EDGES to file")
     verticesToSave.saveAsTextFile(s"${basePath}_vertices_$iter")
     edgesToSave.saveAsTextFile(s"${basePath}_edges_$iter")
   }
@@ -123,7 +127,7 @@ object WikiPipelineBenchmark extends Logging {
   def readEdgesFromText(sc: SparkContext, path: String): RDD[(VertexId, VertexId)] = {
     sc.textFile(path, 128).map { line =>
       val lineSplits = line.split("\\s+")
-      (lineSplits(0).toInt, lineSplits(1).toInt)
+      (lineSplits(0).toLong, lineSplits(1).toLong)
     }
   }
 
@@ -155,7 +159,7 @@ object WikiPipelineBenchmark extends Logging {
   def pipelinePostProcessing(sc: SparkContext, basePath: String, iter: Int) {
     val pageranks = GraphLoader.loadVertices(sc, s"${basePath}_${iter}_prs*")
       .map {v => (v._1, v._2.toDouble) }
-    val connComponents = GraphLoader.loadVertices(sc, s"${basePath}_${iter}_ccs*")
+    val connComponents = GraphLoader.loadVertices(sc, s"${basePath}_${iter}_ccs*", ",")
       .map {v => (v._1, v._2.toLong) }
     val edges = readEdgesFromText(sc, s"${basePath}_edges_$iter")
     val artNames = GraphLoader.loadVertices(sc, s"${basePath}_vertices_$iter")
