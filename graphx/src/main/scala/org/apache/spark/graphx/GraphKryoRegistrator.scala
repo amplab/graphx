@@ -54,10 +54,6 @@ class GraphKryoRegistrator extends KryoRegistrator {
     kryo.register(classOf[WikiArticle])
     // kryo.register(classOf[JHashSet[VertexId]])
     kryo.register(classOf[JTreeSet[VertexId]])
-    kryo.register(classOf[TrackCounts])
-//     kryo.register(classOf[MakeString])
-//     kryo.register(classOf[PrePostProcessWikipedia])
-//     kryo.register(classOf[(LongWritable, Text)])
 
     // This avoids a large number of hash table lookups.
     kryo.setReferences(false)
