@@ -77,6 +77,7 @@ object WikiPipelineBenchmark extends Logging {
       val startTime = System.currentTimeMillis
       logWarning("starting pagerank")
       // GRAPH VIEW
+      val ccStartTime = System.currentTimeMillis
       val ccGraph = ConnectedComponents.run(currentGraph).cache
       val zeroVal = new JTreeSet[VertexId]()
       val seqOp = (s: JTreeSet[VertexId], vtuple: (VertexId, VertexId)) => {
@@ -89,9 +90,14 @@ object WikiPipelineBenchmark extends Logging {
       }
       // TABLE VIEW
       val numCCs = ccGraph.vertices.aggregate(zeroVal)(seqOp, combOp).size()
+      val ccEndTime = System.currentTimeMillis
+      logWarning(s"Connected Components TIMEX: ${(ccEndTime - ccStartTime)/1000.0}")
       logWarning(s"Number of connected components for iteration $i: $numCCs")
+      val prStartTime = System.currentTimeMillis
       val pr = PageRank.run(currentGraph, 20).cache
       pr.vertices.count
+      val prEndTime = System.currentTimeMillis
+      logWarning(s"Pagerank TIMEX: ${(prEndTime - prStartTime)/1000.0}")
       logWarning("Pagerank completed")
       // TABLE VIEW
       val prAndTitle = currentGraph.outerJoinVertices(pr.vertices)({(id: VertexId, title: String, rank: Option[Double]) => (title, rank.getOrElse(0.0))}).cache
@@ -106,7 +112,11 @@ object WikiPipelineBenchmark extends Logging {
       }
       val newGraph = currentGraph.subgraph(x => true, filterTop20).cache
       newGraph.vertices.count
-      logWarning(s"TIMEX iter $i ${(System.currentTimeMillis - startTime)/1000.0}")
+      logWarning(s"TOTAL_TIMEX iter $i ${(System.currentTimeMillis - startTime)/1000.0}")
+      currentGraph.unpersistVertices(blocking = false)
+      ccGraph.unpersistVertices(blocking = false)
+      pr.unpersistVertices(blocking = false)
+      prAndTitle.unpersistVertices(blocking = false)
       currentGraph = newGraph
     }
     currentGraph
