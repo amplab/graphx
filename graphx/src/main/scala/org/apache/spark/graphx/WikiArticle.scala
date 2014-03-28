@@ -46,7 +46,7 @@ object WikiArticle {
   val redirectPattern = "#REDIRECT\\s+\\[\\[(.*?)\\]\\]".r
   val disambigPattern = "\\{\\{disambig\\}\\}".r
   val stubPattern = "\\-stub\\}\\}".r
-  val linkPattern = Pattern.compile("\\[\\[(.*?)\\]\\]", Pattern.MULTILINE) 
+  val linkPattern = Pattern.compile("\\[\\[(.*?)\\]\\]", Pattern.MULTILINE)
 
   val notFoundString = "NOTFOUND"
 
@@ -78,8 +78,10 @@ object WikiArticle {
     var h: Long = 1125899906842597L  // prime
     // var h = 29
     val len: Int = s.length
-    for (i <- 0 until len) {
+    var i = 0
+    while (i < len) {
       h = 31*h + s.charAt(i)
+      i += 1
     }
     h
 //     val md: MessageDigest = MessageDigest.getInstance("MD5")
