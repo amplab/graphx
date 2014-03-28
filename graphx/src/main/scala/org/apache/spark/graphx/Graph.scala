@@ -335,7 +335,7 @@ abstract class Graph[VD: ClassTag, ED: ClassTag] protected () extends Serializab
    * }
    * }}}
    */
-  def outerJoinVertices[U: ClassTag, VD2: ClassTag](other: RDD[(VertexId, U)])
+  def outerJoinVertices[U: ClassTag, VD2: ClassTag](other: RDD[(VertexId, U)], destructive: Boolean = false)
       (mapFunc: (VertexId, VD, Option[U]) => VD2)
     : Graph[VD2, ED]
 

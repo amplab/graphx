@@ -281,7 +281,7 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
   } // end of mapReduceTriplets
 
   override def outerJoinVertices[U: ClassTag, VD2: ClassTag]
-      (other: RDD[(VertexId, U)])
+      (other: RDD[(VertexId, U)], destructive: Boolean = false)
       (updateF: (VertexId, VD, Option[U]) => VD2): Graph[VD2, ED] =
   {
     if (classTag[VD] equals classTag[VD2]) {
@@ -290,7 +290,7 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
       val changedVerts = vertices.asInstanceOf[VertexRDD[VD2]].diff(newVerts)
       val newReplicatedVertexView = new ReplicatedVertexView[VD2](
         changedVerts, edges, routingTable,
-        Some(replicatedVertexView.asInstanceOf[ReplicatedVertexView[VD2]]))
+        Some(replicatedVertexView.asInstanceOf[ReplicatedVertexView[VD2]]), destructive)
       new GraphImpl(newVerts, edges, routingTable, newReplicatedVertexView)
     } else {
       // updateF does not preserve type, so we must re-replicate all vertices

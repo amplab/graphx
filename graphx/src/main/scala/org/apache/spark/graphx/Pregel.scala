@@ -132,7 +132,7 @@ object Pregel extends Logging {
       val newVerts = g.vertices.innerJoin(messages)(vprog).cache()
       // Update the graph with the new vertices.
       prevG = g
-      g = g.outerJoinVertices(newVerts) { (vid, old, newOpt) => newOpt.getOrElse(old) }
+      g = g.outerJoinVertices(newVerts, destructive = i > 0) { (vid, old, newOpt) => newOpt.getOrElse(old) }
       g.cache()
 
       val oldMessages = messages

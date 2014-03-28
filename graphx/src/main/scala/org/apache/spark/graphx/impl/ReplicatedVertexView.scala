@@ -42,7 +42,8 @@ class ReplicatedVertexView[VD: ClassTag](
     updatedVerts: VertexRDD[VD],
     edges: EdgeRDD[_],
     routingTable: RoutingTable,
-    prevViewOpt: Option[ReplicatedVertexView[VD]] = None) {
+    prevViewOpt: Option[ReplicatedVertexView[VD]] = None,
+    destructive: Boolean = false) {
 
   /**
    * Within each edge partition, create a local map from vid to an index into the attribute
@@ -122,6 +123,7 @@ class ReplicatedVertexView[VD: ClassTag](
     val shippedVerts = routingTable.get(includeSrc, includeDst)
       .zipPartitions(verts)(ReplicatedVertexView.buildBuffer(_, _)(vdTag))
       .partitionBy(edges.partitioner.get)
+    val destructiveLocal = destructive // to avoid closure capture
     // TODO: Consider using a specialized shuffler.
 
     prevViewOpt match {
