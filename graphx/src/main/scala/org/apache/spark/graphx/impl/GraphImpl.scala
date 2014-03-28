@@ -59,9 +59,13 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     val edTag = classTag[ED]
     edges.partitionsRDD.zipPartitions(
       replicatedVertexView.get(true, true), true) { (ePartIter, vPartIter) =>
-      val (pid, ePart) = ePartIter.next()
-      val (_, vPart) = vPartIter.next()
-      new EdgeTripletIterator(vPart.index, vPart.values, ePart)(vdTag, edTag)
+      if (ePartIter.hasNext && vPartIter.hasNext) {
+        val (pid, ePart) = ePartIter.next()
+        val (_, vPart) = vPartIter.next()
+        new EdgeTripletIterator(vPart.index, vPart.values, ePart)(vdTag, edTag)
+      } else {
+        Iterator.empty
+      }
     }
   }
 
@@ -132,22 +136,26 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     val newEdgePartitions =
       edges.partitionsRDD.zipPartitions(replicatedVertexView.get(true, true), true) {
         (ePartIter, vTableReplicatedIter) =>
-        val (ePid, edgePartition) = ePartIter.next()
-        val (vPid, vPart) = vTableReplicatedIter.next()
-        assert(!vTableReplicatedIter.hasNext)
-        assert(ePid == vPid)
-        val et = new EdgeTriplet[VD, ED]
-        val inputIterator = edgePartition.iterator.map { e =>
-          et.set(e)
-          et.srcAttr = vPart(e.srcId)
-          et.dstAttr = vPart(e.dstId)
-          et
-        }
-        // Apply the user function to the vertex partition
-        val outputIter = f(ePid, inputIterator)
-        // Consume the iterator to update the edge attributes
-        val newEdgePartition = edgePartition.map(outputIter)
-        Iterator((ePid, newEdgePartition))
+          if (ePartIter.hasNext && vTableReplicatedIter.hasNext) {
+            val (ePid, edgePartition) = ePartIter.next()
+            val (vPid, vPart) = vTableReplicatedIter.next()
+            assert(!vTableReplicatedIter.hasNext)
+            assert(ePid == vPid)
+            val et = new EdgeTriplet[VD, ED]
+            val inputIterator = edgePartition.iterator.map { e =>
+              et.set(e)
+              et.srcAttr = vPart(e.srcId)
+              et.dstAttr = vPart(e.dstId)
+              et
+            }
+            // Apply the user function to the vertex partition
+            val outputIter = f(ePid, inputIterator)
+            // Consume the iterator to update the edge attributes
+            val newEdgePartition = edgePartition.map(outputIter)
+            Iterator((ePid, newEdgePartition))
+          } else {
+            Iterator.empty
+          }
       }
     new GraphImpl(vertices, new EdgeRDD(newEdgePartitions), routingTable, replicatedVertexView)
   }
@@ -217,7 +225,7 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
 
     // Map and combine.
     val preAgg = edges.partitionsRDD.zipPartitions(vs, true) { (ePartIter, vPartIter) =>
-      if (ePartIter.hasNext) {
+      if (ePartIter.hasNext && vPartIter.hasNext) {
         val (ePid, edgePartition) = ePartIter.next()
         val (vPid, vPart) = vPartIter.next()
         assert(!vPartIter.hasNext)

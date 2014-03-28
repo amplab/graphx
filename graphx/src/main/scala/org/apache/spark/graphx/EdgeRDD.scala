@@ -45,7 +45,12 @@ class EdgeRDD[@specialized ED: ClassTag](
     partitionsRDD.partitioner.orElse(Some(Partitioner.defaultPartitioner(partitionsRDD)))
 
   override def compute(part: Partition, context: TaskContext): Iterator[Edge[ED]] = {
-    firstParent[(PartitionID, EdgePartition[ED])].iterator(part, context).next._2.iterator
+    val partIter = firstParent[(PartitionID, EdgePartition[ED])].iterator(part, context)
+    if (partIter.hasNext) {
+      partIter.next._2.iterator
+    } else {
+      Iterator.empty
+    }
   }
 
   override def collect(): Array[Edge[ED]] = this.map(_.copy()).collect()
@@ -69,8 +74,12 @@ class EdgeRDD[@specialized ED: ClassTag](
   private[graphx] def mapEdgePartitions[ED2: ClassTag](
       f: (PartitionID, EdgePartition[ED]) => EdgePartition[ED2]): EdgeRDD[ED2] = {
     new EdgeRDD[ED2](partitionsRDD.mapPartitions({ iter =>
-      val (pid, ep) = iter.next()
-      Iterator(Tuple2(pid, f(pid, ep)))
+      if (iter.hasNext) {
+        val (pid, ep) = iter.next()
+        Iterator(Tuple2(pid, f(pid, ep)))
+      } else {
+        Iterator.empty
+      }
     }, preservesPartitioning = true))
   }
 
@@ -107,9 +116,13 @@ class EdgeRDD[@specialized ED: ClassTag](
     val ed3Tag = classTag[ED3]
     new EdgeRDD[ED3](partitionsRDD.zipPartitions(other.partitionsRDD, true) {
       (thisIter, otherIter) =>
-        val (pid, thisEPart) = thisIter.next()
-        val (_, otherEPart) = otherIter.next()
-        Iterator(Tuple2(pid, thisEPart.innerJoin(otherEPart)(f)(ed2Tag, ed3Tag)))
+        if (thisIter.hasNext && otherIter.hasNext) {
+          val (pid, thisEPart) = thisIter.next()
+          val (_, otherEPart) = otherIter.next()
+          Iterator(Tuple2(pid, thisEPart.innerJoin(otherEPart)(f)(ed2Tag, ed3Tag)))
+        } else {
+          Iterator.empty
+        }
     })
   }
 

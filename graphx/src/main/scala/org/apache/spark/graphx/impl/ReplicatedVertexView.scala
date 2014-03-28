@@ -103,9 +103,13 @@ class ReplicatedVertexView[VD: ClassTag](
     // Update the view with shippedActives, setting activeness flags in the resulting
     // VertexPartitions
     get(includeSrc, includeDst).zipPartitions(shippedActives) { (viewIter, shippedActivesIter) =>
-      val (pid, vPart) = viewIter.next()
-      val newPart = vPart.replaceActives(shippedActivesIter.flatMap(_._2.iterator))
-      Iterator((pid, newPart))
+      if (viewIter.hasNext) {
+        val (pid, vPart) = viewIter.next()
+        val newPart = vPart.replaceActives(shippedActivesIter.flatMap(_._2.iterator))
+        Iterator((pid, newPart))
+      } else {
+        Iterator.empty
+      }
     }
   }
 
@@ -126,30 +130,40 @@ class ReplicatedVertexView[VD: ClassTag](
         // VertexPartitions
         prevView.get(includeSrc, includeDst).zipPartitions(shippedVerts) {
           (prevViewIter, shippedVertsIter) =>
-            val (pid, prevVPart) = prevViewIter.next()
-            val newVPart = prevVPart.innerJoinKeepLeftDestructive(shippedVertsIter.flatMap(_._2.iterator))
-            Iterator((pid, newVPart))
+            if (prevViewIter.hasNext) {
+              val (pid, prevVPart) = prevViewIter.next()
+              val newVPart =
+                if (destructiveLocal) prevVPart.innerJoinKeepLeftDestructive(shippedVertsIter.flatMap(_._2.iterator))
+                else prevVPart.innerJoinKeepLeft(shippedVertsIter.flatMap(_._2.iterator))
+              Iterator((pid, newVPart))
+            } else {
+              Iterator.empty
+            }
         }.cache().setName("ReplicatedVertexView delta %s %s".format(includeSrc, includeDst))
 
       case None =>
         // Within each edge partition, place the shipped vertex attributes into the correct
         // locations specified in localVertexIdMap
         localVertexIdMap.zipPartitions(shippedVerts) { (mapIter, shippedVertsIter) =>
-          val (pid, vidToIndex) = mapIter.next()
-          assert(!mapIter.hasNext)
-          // Populate the vertex array using the vidToIndex map
-          val vertexArray = vdTag.newArray(vidToIndex.capacity)
-          for ((_, block) <- shippedVertsIter) {
-            for (i <- 0 until block.vids.size) {
-              val vid = block.vids(i)
-              val attr = block.attrs(i)
-              val ind = vidToIndex.getPos(vid)
-              vertexArray(ind) = attr
+          if (mapIter.hasNext) {
+            val (pid, vidToIndex) = mapIter.next()
+            assert(!mapIter.hasNext)
+            // Populate the vertex array using the vidToIndex map
+            val vertexArray = vdTag.newArray(vidToIndex.capacity)
+            for ((_, block) <- shippedVertsIter) {
+              for (i <- 0 until block.vids.size) {
+                val vid = block.vids(i)
+                val attr = block.attrs(i)
+                val ind = vidToIndex.getPos(vid)
+                vertexArray(ind) = attr
+              }
             }
+            val newVPart = new VertexPartition(
+              vidToIndex, vertexArray, vidToIndex.getBitSet)(vdTag)
+            Iterator((pid, newVPart))
+          } else {
+            Iterator.empty
           }
-          val newVPart = new VertexPartition(
-            vidToIndex, vertexArray, vidToIndex.getBitSet)(vdTag)
-          Iterator((pid, newVPart))
         }.cache().setName("ReplicatedVertexView %s %s".format(includeSrc, includeDst))
     }
   }
@@ -159,24 +173,28 @@ private object ReplicatedVertexView {
   protected def buildBuffer[VD: ClassTag](
       pid2vidIter: Iterator[Array[Array[VertexId]]],
       vertexPartIter: Iterator[VertexPartition[VD]]) = {
-    val pid2vid: Array[Array[VertexId]] = pid2vidIter.next()
-    val vertexPart: VertexPartition[VD] = vertexPartIter.next()
+    if (pid2vidIter.hasNext && vertexPartIter.hasNext) {
+      val pid2vid: Array[Array[VertexId]] = pid2vidIter.next()
+      val vertexPart: VertexPartition[VD] = vertexPartIter.next()
 
-    Iterator.tabulate(pid2vid.size) { pid =>
-      val vidsCandidate = pid2vid(pid)
-      val size = vidsCandidate.length
-      val vids = new PrimitiveVector[VertexId](pid2vid(pid).size)
-      val attrs = new PrimitiveVector[VD](pid2vid(pid).size)
-      var i = 0
-      while (i < size) {
-        val vid = vidsCandidate(i)
-        if (vertexPart.isDefined(vid)) {
-          vids += vid
-          attrs += vertexPart(vid)
+      Iterator.tabulate(pid2vid.size) { pid =>
+        val vidsCandidate = pid2vid(pid)
+        val size = vidsCandidate.length
+        val vids = new PrimitiveVector[VertexId](pid2vid(pid).size)
+        val attrs = new PrimitiveVector[VD](pid2vid(pid).size)
+        var i = 0
+        while (i < size) {
+          val vid = vidsCandidate(i)
+          if (vertexPart.isDefined(vid)) {
+            vids += vid
+            attrs += vertexPart(vid)
+          }
+          i += 1
         }
-        i += 1
+        (pid, new VertexAttributeBlock(vids.trim().array, attrs.trim().array))
       }
-      (pid, new VertexAttributeBlock(vids.trim().array, attrs.trim().array))
+    } else {
+      Iterator.empty
     }
   }
 
@@ -184,22 +202,26 @@ private object ReplicatedVertexView {
       pid2vidIter: Iterator[Array[Array[VertexId]]],
       activePartIter: Iterator[VertexPartition[_]])
     : Iterator[(Int, Array[VertexId])] = {
-    val pid2vid: Array[Array[VertexId]] = pid2vidIter.next()
-    val activePart: VertexPartition[_] = activePartIter.next()
+    if (pid2vidIter.hasNext && activePartIter.hasNext) {
+      val pid2vid: Array[Array[VertexId]] = pid2vidIter.next()
+      val activePart: VertexPartition[_] = activePartIter.next()
 
-    Iterator.tabulate(pid2vid.size) { pid =>
-      val vidsCandidate = pid2vid(pid)
-      val size = vidsCandidate.length
-      val actives = new PrimitiveVector[VertexId](vidsCandidate.size)
-      var i = 0
-      while (i < size) {
-        val vid = vidsCandidate(i)
-        if (activePart.isDefined(vid)) {
-          actives += vid
+      Iterator.tabulate(pid2vid.size) { pid =>
+        val vidsCandidate = pid2vid(pid)
+        val size = vidsCandidate.length
+        val actives = new PrimitiveVector[VertexId](vidsCandidate.size)
+        var i = 0
+        while (i < size) {
+          val vid = vidsCandidate(i)
+          if (activePart.isDefined(vid)) {
+            actives += vid
+          }
+          i += 1
         }
-        i += 1
+        (pid, actives.trim().array)
       }
-      (pid, actives.trim().array)
+    } else {
+      Iterator.empty
     }
   }
 }
