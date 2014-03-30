@@ -80,8 +80,8 @@ object WikiPipelineBenchmark extends Logging {
       val (verticesUnpart, edgesUnpart) = extractLinkGraph(sc, rawData, parsePart)
       // val vertices = verticesUnpart.coalesce(graphPart, false)
       // val edges = edgesUnpart.coalesce(graphPart, false)
-      val vertices = verticesUnpart.coalesce(graphPart)
-      val edges = edgesUnpart.coalesce(graphPart)
+      val vertices = verticesUnpart.repartition(graphPart)
+      val edges = edgesUnpart.repartition(graphPart)
 
       val g = time("graph creation") {
         val result = Graph(vertices, edges)
