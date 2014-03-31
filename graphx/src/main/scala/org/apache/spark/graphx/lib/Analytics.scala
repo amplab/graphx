@@ -57,10 +57,12 @@ object Analytics extends Logging {
         var tol: Float = 0.001F
         var outFname = ""
         var numEPart = 4
+        var numIters = 20
         var partitionStrategy: Option[PartitionStrategy] = None
 
         options.foreach{
           case ("tol", v) => tol = v.toFloat
+          case ("numIters", v) => numIters = v.toInt
           case ("output", v) => outFname = v
           case ("numEPart", v) => numEPart = v.toInt
           case ("partStrategy", v) => partitionStrategy = Some(pickPartitioner(v))
@@ -73,14 +75,17 @@ object Analytics extends Logging {
 
         val sc = new SparkContext(host, "PageRank(" + fname + ")", conf)
 
+        val startTime = System.currentTimeMillis
         val unpartitionedGraph = GraphLoader.edgeListFile(sc, fname,
           minEdgePartitions = numEPart).cache()
         val graph = partitionStrategy.foldLeft(unpartitionedGraph)(_.partitionBy(_))
 
         println("GRAPHX: Number of vertices " + graph.vertices.count)
         println("GRAPHX: Number of edges " + graph.edges.count)
+        logWarning(s"Graph creation TIMEX: ${(System.currentTimeMillis - startTime) / 1000.0}")
 
-        val pr = graph.pageRank(tol).vertices.cache()
+        // val pr = graph.pageRank(tol).vertices.cache()
+        val pr = PageRank.run(graph, numIters).vertices.cache()
 
         println("GRAPHX: Total rank: " + pr.map(_._2).reduce(_ + _))
 
