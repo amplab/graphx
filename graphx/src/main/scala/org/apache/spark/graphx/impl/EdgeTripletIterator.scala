@@ -31,7 +31,9 @@ private[impl]
 class EdgeTripletIterator[VD: ClassTag, ED: ClassTag](
     val vidToIndex: VertexIdToIndexMap,
     val vertexArray: Array[VD],
-    val edgePartition: EdgePartition[ED])
+    val edgePartition: EdgePartition[ED, VD],
+    val includeSrc: Boolean,
+    val includeDst: Boolean)
   extends Iterator[EdgeTriplet[VD, ED]] {
 
   // Current position in the array.
@@ -44,9 +46,13 @@ class EdgeTripletIterator[VD: ClassTag, ED: ClassTag](
   override def next() = {
     val triplet = new EdgeTriplet[VD, ED]
     triplet.srcId = edgePartition.srcIds(pos)
-    triplet.srcAttr = vmap(triplet.srcId)
+    if (includeSrc) {
+      triplet.srcAttr = vmap(triplet.srcId)
+    }
     triplet.dstId = edgePartition.dstIds(pos)
-    triplet.dstAttr = vmap(triplet.dstId)
+    if (includeDst) {
+      triplet.dstAttr = vmap(triplet.dstId)
+    }
     triplet.attr = edgePartition.data(pos)
     pos += 1
     triplet

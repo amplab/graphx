@@ -45,37 +45,25 @@ import org.apache.spark.util.ClosureCleaner
  */
 class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     @transient val vertices: VertexRDD[VD],
-    @transient val edges: EdgeRDD[ED],
-    @transient val routingTable: RoutingTable,
-    @transient val replicatedVertexView: ReplicatedVertexView[VD])
+    @transient private val replicatedVertexView: ReplicatedVertexView[VD, ED])
   extends Graph[VD, ED] with Serializable with Logging {
 
   /** Default constructor is provided to support serialization */
-  protected def this() = this(null, null, null, null)
+  protected def this() = this(null, null)
+
+  @transient override val edges: EdgeRDD[ED, VD] = replicatedVertexView.edges
 
   /** Return a RDD that brings edges together with their source and destination vertices. */
-  @transient override val triplets: RDD[EdgeTriplet[VD, ED]] = {
-    val vdTag = classTag[VD]
-    val edTag = classTag[ED]
-    edges.partitionsRDD.zipPartitions(
-      replicatedVertexView.get(true, true), true) { (ePartIter, vPartIter) =>
-      if (ePartIter.hasNext && vPartIter.hasNext) {
-        val (pid, ePart) = ePartIter.next()
-        val (_, vPart) = vPartIter.next()
-        new EdgeTripletIterator(vPart.index, vPart.values, ePart)(vdTag, edTag)
-      } else {
-        if (ePartIter.hasNext != vPartIter.hasNext) {
-          logError("triplets: Dropped non-empty %s partition".format(
-            if (ePartIter.hasNext) "edge" else "vertex"))
-        }
-        Iterator.empty
-      }
-    }
+  @transient override lazy val triplets: RDD[EdgeTriplet[VD, ED]] = {
+    replicatedVertexView.upgrade(vertices, true, true)
+    replicatedVertexView.edges.partitionsRDD.mapPartitions(_.flatMap {
+      case (pid, part) => part.tripletIterator()
+    })
   }
 
   override def persist(newLevel: StorageLevel): Graph[VD, ED] = {
     vertices.persist(newLevel)
-    edges.persist(newLevel)
+    replicatedVertexView.edges.persist(newLevel)
     this
   }
 
@@ -83,14 +71,14 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
 
   override def unpersistVertices(blocking: Boolean = true): Graph[VD, ED] = {
     vertices.unpersist(blocking)
-    replicatedVertexView.unpersist(blocking)
     this
   }
 
   override def partitionBy(partitionStrategy: PartitionStrategy): Graph[VD, ED] = {
-    val numPartitions = edges.partitions.size
+    val numPartitions = replicatedVertexView.edges.partitions.size
     val edTag = classTag[ED]
-    val newEdges = new EdgeRDD(edges.map { e =>
+    val vdTag = classTag[VD]
+    val newEdges = new EdgeRDD(replicatedVertexView.edges.map { e =>
       val part: PartitionID = partitionStrategy.getPartition(e.srcId, e.dstId, numPartitions)
 
       // Should we be using 3-tuple or an optimized class
@@ -98,20 +86,20 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
     }
       .partitionBy(new HashPartitioner(numPartitions))
       .mapPartitionsWithIndex( { (pid, iter) =>
-        val builder = new EdgePartitionBuilder[ED]()(edTag)
+        val builder = new EdgePartitionBuilder[ED, VD]()(edTag, vdTag)
         iter.foreach { message =>
           val data = message.data
           builder.add(data._1, data._2, data._3)
         }
         val edgePartition = builder.toEdgePartition
         Iterator((pid, edgePartition))
-      }, preservesPartitioning = true).cache())
-    GraphImpl(vertices, newEdges)
+      }, preservesPartitioning = true))
+    GraphImpl.fromExistingRDDs(vertices, newEdges)
   }
 
   override def reverse: Graph[VD, ED] = {
-    val newETable = edges.mapEdgePartitions((pid, part) => part.reverse)
-    new GraphImpl(vertices, newETable, routingTable, replicatedVertexView)
+    val newEdges = edges.mapEdgePartitions((pid, part) => part.reverse)
+    new GraphImpl(vertices, replicatedVertexView.withEdges(newEdges))
   }
 
   override def mapVertices[VD2: ClassTag](f: (VertexId, VD) => VD2): Graph[VD2, ED] = {
@@ -119,53 +107,31 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
       // The map preserves type, so we can use incremental replication
       val newVerts = vertices.mapVertexPartitions(_.map(f)).cache()
       val changedVerts = vertices.asInstanceOf[VertexRDD[VD2]].diff(newVerts)
-      val newReplicatedVertexView = new ReplicatedVertexView[VD2](
-        changedVerts, edges, routingTable,
-        Some(replicatedVertexView.asInstanceOf[ReplicatedVertexView[VD2]]))
-      new GraphImpl(newVerts, edges, routingTable, newReplicatedVertexView)
+      val newReplicatedVertexView = replicatedVertexView.asInstanceOf[ReplicatedVertexView[VD2, ED]]
+        .updateVertices(changedVerts)
+      new GraphImpl(newVerts, newReplicatedVertexView)
     } else {
       // The map does not preserve type, so we must re-replicate all vertices
-      GraphImpl(vertices.mapVertexPartitions(_.map(f)), edges, routingTable)
+      GraphImpl(vertices.mapVertexPartitions(_.map(f)), replicatedVertexView.edges)
     }
   }
 
   override def mapEdges[ED2: ClassTag](
       f: (PartitionID, Iterator[Edge[ED]]) => Iterator[ED2]): Graph[VD, ED2] = {
-    val newETable = edges.mapEdgePartitions((pid, part) => part.map(f(pid, part.iterator)))
-    new GraphImpl(vertices, newETable , routingTable, replicatedVertexView)
+    val newEdges = replicatedVertexView.edges
+      .mapEdgePartitions((pid, part) => part.map(f(pid, part.iterator)))
+    new GraphImpl(vertices, replicatedVertexView.withEdges(newEdges))
   }
 
   override def mapTriplets[ED2: ClassTag](
       f: (PartitionID, Iterator[EdgeTriplet[VD, ED]]) => Iterator[ED2]): Graph[VD, ED2] = {
-    val newEdgePartitions =
-      edges.partitionsRDD.zipPartitions(replicatedVertexView.get(true, true), true) {
-        (ePartIter, vTableReplicatedIter) =>
-          if (ePartIter.hasNext && vTableReplicatedIter.hasNext) {
-            val (ePid, edgePartition) = ePartIter.next()
-            val (vPid, vPart) = vTableReplicatedIter.next()
-            assert(!vTableReplicatedIter.hasNext)
-            assert(ePid == vPid)
-            val et = new EdgeTriplet[VD, ED]
-            val inputIterator = edgePartition.iterator.map { e =>
-              et.set(e)
-              et.srcAttr = vPart(e.srcId)
-              et.dstAttr = vPart(e.dstId)
-              et
-            }
-            // Apply the user function to the vertex partition
-            val outputIter = f(ePid, inputIterator)
-            // Consume the iterator to update the edge attributes
-            val newEdgePartition = edgePartition.map(outputIter)
-            Iterator((ePid, newEdgePartition))
-          } else {
-            if (ePartIter.hasNext != vTableReplicatedIter.hasNext) {
-              logError("mapTriplets: Dropped non-empty %s partition".format(
-                if (ePartIter.hasNext) "edge" else "ReplicatedVertexView"))
-            }
-            Iterator.empty
-          }
-      }
-    new GraphImpl(vertices, new EdgeRDD(newEdgePartitions), routingTable, replicatedVertexView)
+    val mapUsesSrcAttr = accessesVertexAttr(f, "srcAttr")
+    val mapUsesDstAttr = accessesVertexAttr(f, "dstAttr")
+    replicatedVertexView.upgrade(vertices, mapUsesSrcAttr, mapUsesDstAttr)
+    val newEdges = replicatedVertexView.edges.mapEdgePartitions { (pid, part) =>
+      part.map(f(pid, part.tripletIterator(mapUsesSrcAttr, mapUsesDstAttr)))
+    }
+    new GraphImpl(vertices, replicatedVertexView.withEdges(newEdges))
   }
 
   override def subgraph(
@@ -173,38 +139,23 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
       vpred: (VertexId, VD) => Boolean = (a, b) => true): Graph[VD, ED] = {
     // Filter the vertices, reusing the partitioner and the index from this graph
     val newVerts = vertices.mapVertexPartitions(_.filter(vpred))
-
-    // Filter the edges
-    val edTag = classTag[ED]
-    val newEdges = new EdgeRDD[ED](triplets.filter { et =>
-      vpred(et.srcId, et.srcAttr) && vpred(et.dstId, et.dstAttr) && epred(et)
-    }.mapPartitionsWithIndex( { (pid, iter) =>
-      val builder = new EdgePartitionBuilder[ED]()(edTag)
-      iter.foreach { et => builder.add(et.srcId, et.dstId, et.attr) }
-      val edgePartition = builder.toEdgePartition
-      Iterator((pid, edgePartition))
-    }, preservesPartitioning = true)).cache()
-
-    // Reuse the previous ReplicatedVertexView unmodified. The replicated vertices that have been
-    // removed will be ignored, since we only refer to replicated vertices when they are adjacent to
-    // an edge.
-    new GraphImpl(newVerts, newEdges, new RoutingTable(newEdges, newVerts), replicatedVertexView)
-  } // end of subgraph
+    // Filter the triplets
+    replicatedVertexView.upgrade(vertices, true, true)
+    val newEdges = replicatedVertexView.edges.filter(epred, vpred)
+    new GraphImpl(newVerts, replicatedVertexView.withEdges(newEdges))
+  }
 
   override def mask[VD2: ClassTag, ED2: ClassTag] (
       other: Graph[VD2, ED2]): Graph[VD, ED] = {
     val newVerts = vertices.innerJoin(other.vertices) { (vid, v, w) => v }
-    val newEdges = edges.innerJoin(other.edges) { (src, dst, v, w) => v }
-    // Reuse the previous ReplicatedVertexView unmodified. The replicated vertices that have been
-    // removed will be ignored, since we only refer to replicated vertices when they are adjacent to
-    // an edge.
-    new GraphImpl(newVerts, newEdges, routingTable, replicatedVertexView)
+    val newEdges = replicatedVertexView.edges.innerJoin(other.edges) { (src, dst, v, w) => v }
+    new GraphImpl(newVerts, replicatedVertexView.withEdges(newEdges))
   }
 
   override def groupEdges(merge: (ED, ED) => ED): Graph[VD, ED] = {
-    ClosureCleaner.clean(merge)
-    val newETable = edges.mapEdgePartitions((pid, part) => part.groupEdges(merge))
-    new GraphImpl(vertices, newETable, routingTable, replicatedVertexView)
+    val newEdges = replicatedVertexView.edges.mapEdgePartitions(
+      (pid, part) => part.groupEdges(merge))
+    new GraphImpl(vertices, replicatedVertexView.withEdges(newEdges))
   }
 
   // ///////////////////////////////////////////////////////////////////////////////////////////////
@@ -216,76 +167,58 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
       reduceFunc: (A, A) => A,
       activeSetOpt: Option[(VertexRDD[_], EdgeDirection)] = None): VertexRDD[A] = {
 
-    ClosureCleaner.clean(mapFunc)
-    ClosureCleaner.clean(reduceFunc)
+    vertices.cache()
 
     // For each vertex, replicate its attribute only to partitions where it is
     // in the relevant position in an edge.
     val mapUsesSrcAttr = accessesVertexAttr(mapFunc, "srcAttr")
     val mapUsesDstAttr = accessesVertexAttr(mapFunc, "dstAttr")
-    val vs = activeSetOpt match {
+    replicatedVertexView.upgrade(vertices, mapUsesSrcAttr, mapUsesDstAttr)
+    val view = activeSetOpt match {
       case Some((activeSet, _)) =>
-        replicatedVertexView.get(mapUsesSrcAttr, mapUsesDstAttr, activeSet)
+        replicatedVertexView.withActiveSet(activeSet)
       case None =>
-        replicatedVertexView.get(mapUsesSrcAttr, mapUsesDstAttr)
+        replicatedVertexView
     }
     val activeDirectionOpt = activeSetOpt.map(_._2)
 
     // Map and combine.
-    val preAgg = edges.partitionsRDD.zipPartitions(vs, true) { (ePartIter, vPartIter) =>
-      if (ePartIter.hasNext && vPartIter.hasNext) {
-        val (ePid, edgePartition) = ePartIter.next()
-        val (vPid, vPart) = vPartIter.next()
-        assert(!vPartIter.hasNext)
-        assert(ePid == vPid)
+    val preAgg = view.edges.partitionsRDD.mapPartitions(_.flatMap {
+      case (pid, edgePartition) =>
         // Choose scan method
-        val activeFraction = vPart.numActives.getOrElse(0) / edgePartition.indexSize.toFloat
+        val activeFraction = edgePartition.numActives.getOrElse(0) / edgePartition.indexSize.toFloat
         val edgeIter = activeDirectionOpt match {
           case Some(EdgeDirection.Both) =>
             if (activeFraction < 0.8) {
-              edgePartition.indexIterator(srcVertexId => vPart.isActive(srcVertexId))
-                .filter(e => vPart.isActive(e.dstId))
+              edgePartition.indexIterator(srcVertexId => edgePartition.isActive(srcVertexId))
+                .filter(e => edgePartition.isActive(e.dstId))
             } else {
-              edgePartition.iterator.filter(e => vPart.isActive(e.srcId) && vPart.isActive(e.dstId))
+              edgePartition.iterator.filter(e =>
+                edgePartition.isActive(e.srcId) && edgePartition.isActive(e.dstId))
             }
           case Some(EdgeDirection.Either) =>
             // TODO: Because we only have a clustered index on the source vertex ID, we can't filter
             // the index here. Instead we have to scan all edges and then do the filter.
-            edgePartition.iterator.filter(e => vPart.isActive(e.srcId) || vPart.isActive(e.dstId))
+            edgePartition.iterator.filter(e =>
+              edgePartition.isActive(e.srcId) || edgePartition.isActive(e.dstId))
           case Some(EdgeDirection.Out) =>
             if (activeFraction < 0.8) {
-              edgePartition.indexIterator(srcVertexId => vPart.isActive(srcVertexId))
+              edgePartition.indexIterator(srcVertexId => edgePartition.isActive(srcVertexId))
             } else {
-              edgePartition.iterator.filter(e => vPart.isActive(e.srcId))
+              edgePartition.iterator.filter(e => edgePartition.isActive(e.srcId))
             }
           case Some(EdgeDirection.In) =>
-            edgePartition.iterator.filter(e => vPart.isActive(e.dstId))
+            edgePartition.iterator.filter(e => edgePartition.isActive(e.dstId))
           case _ => // None
             edgePartition.iterator
         }
 
         // Scan edges and run the map function
-        val et = new EdgeTriplet[VD, ED]
-        val mapOutputs = edgeIter.flatMap { e =>
-          et.set(e)
-          if (mapUsesSrcAttr) {
-            et.srcAttr = vPart(e.srcId)
-          }
-          if (mapUsesDstAttr) {
-            et.dstAttr = vPart(e.dstId)
-          }
-          mapFunc(et)
-        }
+        val mapOutputs = edgePartition.upgradeIterator(edgeIter, mapUsesSrcAttr, mapUsesDstAttr)
+          .flatMap(mapFunc(_))
         // Note: This doesn't allow users to send messages to arbitrary vertices.
-        vPart.aggregateUsingIndex(mapOutputs, reduceFunc).iterator
-      } else {
-        if (ePartIter.hasNext != vPartIter.hasNext) {
-          logError("mapReduceTriplets: Dropped non-empty %s partition".format(
-            if (ePartIter.hasNext) "edge" else "vertex"))
-        }
-        Iterator.empty
-      }
-    }
+        edgePartition.vertexPartition.aggregateUsingIndex(mapOutputs, reduceFunc).iterator
+    }).setName("GraphImpl.mapReduceTriplets - preAgg")
 
     // do the final reduction reusing the index map
     vertices.aggregateUsingIndex(preAgg, reduceFunc)
@@ -293,20 +226,18 @@ class GraphImpl[VD: ClassTag, ED: ClassTag] protected (
 
   override def outerJoinVertices[U: ClassTag, VD2: ClassTag]
       (other: RDD[(VertexId, U)])
-      (updateF: (VertexId, VD, Option[U]) => VD2): Graph[VD2, ED] =
-  {
+      (updateF: (VertexId, VD, Option[U]) => VD2): Graph[VD2, ED] = {
     if (classTag[VD] equals classTag[VD2]) {
       // updateF preserves type, so we can use incremental replication
       val newVerts = vertices.leftJoin(other)(updateF)
       val changedVerts = vertices.asInstanceOf[VertexRDD[VD2]].diff(newVerts)
-      val newReplicatedVertexView = new ReplicatedVertexView[VD2](
-        changedVerts, edges, routingTable,
-        Some(replicatedVertexView.asInstanceOf[ReplicatedVertexView[VD2]]))
-      new GraphImpl(newVerts, edges, routingTable, newReplicatedVertexView)
+      val newReplicatedVertexView =
+        replicatedVertexView.asInstanceOf[ReplicatedVertexView[VD2, ED]].updateVertices(changedVerts)
+      new GraphImpl(newVerts, newReplicatedVertexView)
     } else {
       // updateF does not preserve type, so we must re-replicate all vertices
       val newVerts = vertices.leftJoin(other)(updateF)
-      GraphImpl(newVerts, edges, routingTable)
+      GraphImpl(newVerts, replicatedVertexView.edges)
     }
   }
 
@@ -325,13 +256,12 @@ object GraphImpl {
 
   def apply[VD: ClassTag, ED: ClassTag](
       edges: RDD[Edge[ED]],
-      defaultVertexAttr: VD): GraphImpl[VD, ED] =
-  {
+      defaultVertexAttr: VD): GraphImpl[VD, ED] = {
     fromEdgeRDD(createEdgeRDD(edges), defaultVertexAttr)
   }
 
   def fromEdgePartitions[VD: ClassTag, ED: ClassTag](
-      edgePartitions: RDD[(PartitionID, EdgePartition[ED])],
+      edgePartitions: RDD[(PartitionID, EdgePartition[ED, VD])],
       defaultVertexAttr: VD): GraphImpl[VD, ED] = {
     fromEdgeRDD(new EdgeRDD(edgePartitions), defaultVertexAttr)
   }
@@ -339,43 +269,26 @@ object GraphImpl {
   def apply[VD: ClassTag, ED: ClassTag](
       vertices: RDD[(VertexId, VD)],
       edges: RDD[Edge[ED]],
-      defaultVertexAttr: VD): GraphImpl[VD, ED] =
-  {
-    val edgeRDD = createEdgeRDD(edges).cache()
-
-    // Get the set of all vids
-    val partitioner = Partitioner.defaultPartitioner(vertices)
-    val vPartitioned = vertices.partitionBy(partitioner)
-    val vidsFromEdges = collectVertexIdsFromEdges(edgeRDD, partitioner)
-    val vids = vPartitioned.zipPartitions(vidsFromEdges) { (vertexIter, vidsFromEdgesIter) =>
-      vertexIter.map(_._1) ++ vidsFromEdgesIter.map(_._1)
-    }
-
-    val vertexRDD = VertexRDD(vids, vPartitioned, defaultVertexAttr)
-
+      defaultVertexAttr: VD): GraphImpl[VD, ED] = {
+    val edgeRDD = createEdgeRDD(edges)(classTag[ED], classTag[VD]).cache()
+    val vertexRDD = VertexRDD(vertices, edgeRDD, defaultVertexAttr)
     GraphImpl(vertexRDD, edgeRDD)
   }
 
   def apply[VD: ClassTag, ED: ClassTag](
       vertices: VertexRDD[VD],
-      edges: EdgeRDD[ED]): GraphImpl[VD, ED] = {
-    // Cache RDDs that are referenced multiple times
-    edges.cache()
-
-    GraphImpl(vertices, edges, new RoutingTable(edges, vertices))
+      edges: EdgeRDD[ED, _]): GraphImpl[VD, ED] = {
+    // Convert the vertex partitions in edges to the correct type
+    val newEdges = edges.mapEdgePartitions(
+      (pid, part) => part.withVertexPartition(part.vertexPartition.map(
+        (vid, attr) => null.asInstanceOf[VD])))
+    GraphImpl.fromExistingRDDs(vertices, newEdges)
   }
 
-  def apply[VD: ClassTag, ED: ClassTag](
+  def fromExistingRDDs[VD: ClassTag, ED: ClassTag](
       vertices: VertexRDD[VD],
-      edges: EdgeRDD[ED],
-      routingTable: RoutingTable): GraphImpl[VD, ED] = {
-    // Cache RDDs that are referenced multiple times. `routingTable` is cached by default, so we
-    // don't cache it explicitly.
-    vertices.cache()
-    edges.cache()
-
-    new GraphImpl(
-      vertices, edges, routingTable, new ReplicatedVertexView(vertices, edges, routingTable))
+      edges: EdgeRDD[ED, VD]): GraphImpl[VD, ED] = {
+    new GraphImpl(vertices, new ReplicatedVertexView(edges))
   }
 
   /**
@@ -386,10 +299,10 @@ object GraphImpl {
    * pair: the key is the partition id, and the value is an EdgePartition object containing all the
    * edges in a partition.
    */
-  private def createEdgeRDD[ED: ClassTag](
-      edges: RDD[Edge[ED]]): EdgeRDD[ED] = {
+  private def createEdgeRDD[ED: ClassTag, VD: ClassTag](
+      edges: RDD[Edge[ED]]): EdgeRDD[ED, VD] = {
     val edgePartitions = edges.mapPartitionsWithIndex { (pid, iter) =>
-      val builder = new EdgePartitionBuilder[ED]
+      val builder = new EdgePartitionBuilder[ED, VD]
       iter.foreach { e =>
         builder.add(e.srcId, e.dstId, e.attr)
       }
@@ -399,23 +312,11 @@ object GraphImpl {
   }
 
   private def fromEdgeRDD[VD: ClassTag, ED: ClassTag](
-      edges: EdgeRDD[ED],
+      edges: EdgeRDD[ED, VD],
       defaultVertexAttr: VD): GraphImpl[VD, ED] = {
     edges.cache()
-    // Get the set of all vids
-    val vids = collectVertexIdsFromEdges(edges, new HashPartitioner(edges.partitions.size))
-    // Create the VertexRDD.
-    val vertices = VertexRDD(vids.mapValues(x => defaultVertexAttr))
-    GraphImpl(vertices, edges)
+    val vertices = VertexRDD.fromEdges(edges, edges.partitions.size, defaultVertexAttr)
+    fromExistingRDDs(vertices, edges)
   }
 
-  /** Collects all vids mentioned in edges and partitions them by partitioner. */
-  private def collectVertexIdsFromEdges(
-      edges: EdgeRDD[_],
-      partitioner: Partitioner): RDD[(VertexId, Int)] = {
-    // TODO: Consider doing map side distinct before shuffle.
-    new ShuffledRDD[VertexId, Int, (VertexId, Int)](
-      edges.collectVertexIds.map(vid => (vid, 0)), partitioner)
-      .setSerializer(new VertexIdMsgSerializer)
-  }
 } // end of object GraphImpl

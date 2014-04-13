@@ -17,7 +17,7 @@
 
 package org.apache.spark.graphx.impl
 
-import scala.reflect.ClassTag
+import scala.reflect.{classTag, ClassTag}
 
 import org.apache.spark.graphx._
 import org.apache.spark.graphx.util.collection.PrimitiveKeyOpenHashMap
@@ -33,23 +33,60 @@ import org.apache.spark.graphx.util.collection.PrimitiveKeyOpenHashMap
  * @tparam ED the edge attribute type.
  */
 private[graphx]
-class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) ED: ClassTag](
+class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) ED: ClassTag, VD: ClassTag](
     val srcIds: Array[VertexId],
     val dstIds: Array[VertexId],
     val data: Array[ED],
-    val index: PrimitiveKeyOpenHashMap[VertexId, Int]) extends Serializable {
+    val index: PrimitiveKeyOpenHashMap[VertexId, Int],
+    // Must include all vids mentioned in srcIds and dstIds. Mask is never used.
+    val vertexPartition: VertexPartition[VD],
+    /** A set of vids of active vertices. May contain vids not in index due to join rewrite. */
+    val activeSet: Option[VertexSet] = None
+  ) extends Serializable {
+
+  /** Look up vid in activeSet, throwing an exception if it is None. */
+  def isActive(vid: VertexId): Boolean = {
+    activeSet.get.contains(vid)
+  }
+
+  /** The number of active vertices, if any exist. */
+  def numActives: Option[Int] = activeSet.map(_.size)
+
+  def withData[ED2: ClassTag](data_ : Array[ED2]): EdgePartition[ED2, VD] = {
+    new EdgePartition(srcIds, dstIds, data_, index, vertexPartition, activeSet)
+  }
+
+  def withVertexPartition[VD2: ClassTag](
+      vertexPartition_ : VertexPartition[VD2]): EdgePartition[ED, VD2] = {
+    new EdgePartition(srcIds, dstIds, data, index, vertexPartition_, activeSet)
+  }
+
+  def withActiveSet(iter: Iterator[VertexId]): EdgePartition[ED, VD] = {
+    val newActiveSet = new VertexSet
+    iter.foreach(newActiveSet.add(_))
+    new EdgePartition(srcIds, dstIds, data, index, vertexPartition, Some(newActiveSet))
+  }
+
+  def withActiveSet(activeSet_ : Option[VertexSet]): EdgePartition[ED, VD] = {
+    new EdgePartition(srcIds, dstIds, data, index, vertexPartition, activeSet_)
+  }
+
+  // iter must contain only vertices already in the vertex partition
+  def updateVertices(iter: Iterator[(VertexId, VD)]): EdgePartition[ED, VD] = {
+    this.withVertexPartition(vertexPartition.innerJoinKeepLeft(iter))
+  }
 
   /**
    * Reverse all the edges in this partition.
    *
    * @return a new edge partition with all edges reversed.
    */
-  def reverse: EdgePartition[ED] = {
-    val builder = new EdgePartitionBuilder(size)
+  def reverse: EdgePartition[ED, VD] = {
+    val builder = new EdgePartitionBuilder(size)(classTag[ED], classTag[VD])
     for (e <- iterator) {
       builder.add(e.dstId, e.srcId, e.attr)
     }
-    builder.toEdgePartition
+    builder.toEdgePartition.withVertexPartition(vertexPartition).withActiveSet(activeSet)
   }
 
   /**
@@ -64,7 +101,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
    * @return a new edge partition with the result of the function `f`
    *         applied to each edge
    */
-  def map[ED2: ClassTag](f: Edge[ED] => ED2): EdgePartition[ED2] = {
+  def map[ED2: ClassTag](f: Edge[ED] => ED2): EdgePartition[ED2, VD] = {
     val newData = new Array[ED2](data.size)
     val edge = new Edge[ED]()
     val size = data.size
@@ -76,7 +113,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
       newData(i) = f(edge)
       i += 1
     }
-    new EdgePartition(srcIds, dstIds, newData, index)
+    this.withData(newData)
   }
 
   /**
@@ -91,7 +128,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
    * @tparam ED2 the type of the new attribute
    * @return a new edge partition with the attribute values replaced
    */
-  def map[ED2: ClassTag](iter: Iterator[ED2]): EdgePartition[ED2] = {
+  def map[ED2: ClassTag](iter: Iterator[ED2]): EdgePartition[ED2, VD] = {
     // Faster than iter.toArray, because the expected size is known.
     val newData = new Array[ED2](data.size)
     var i = 0
@@ -100,7 +137,19 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
       i += 1
     }
     assert(newData.size == i)
-    new EdgePartition(srcIds, dstIds, newData, index)
+    this.withData(newData)
+  }
+
+  def filter(
+      epred: EdgeTriplet[VD, ED] => Boolean,
+      vpred: (VertexId, VD) => Boolean): EdgePartition[ED, VD] = {
+    val filtered = tripletIterator().filter(et =>
+      vpred(et.srcId, et.srcAttr) && vpred(et.dstId, et.dstAttr) && epred(et))
+    val builder = new EdgePartitionBuilder[ED, VD]
+    for (e <- filtered) {
+      builder.add(e.srcId, e.dstId, e.attr)
+    }
+    builder.toEdgePartition.withVertexPartition(vertexPartition).withActiveSet(activeSet)
   }
 
   /**
@@ -119,8 +168,8 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
    * @param merge a commutative associative merge operation
    * @return a new edge partition without duplicate edges
    */
-  def groupEdges(merge: (ED, ED) => ED): EdgePartition[ED] = {
-    val builder = new EdgePartitionBuilder[ED]
+  def groupEdges(merge: (ED, ED) => ED): EdgePartition[ED, VD] = {
+    val builder = new EdgePartitionBuilder[ED, VD]
     var currSrcId: VertexId = null.asInstanceOf[VertexId]
     var currDstId: VertexId = null.asInstanceOf[VertexId]
     var currAttr: ED = null.asInstanceOf[ED]
@@ -141,7 +190,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
     if (size > 0) {
       builder.add(currSrcId, currDstId, currAttr)
     }
-    builder.toEdgePartition
+    builder.toEdgePartition.withVertexPartition(vertexPartition).withActiveSet(activeSet)
   }
 
   /**
@@ -155,9 +204,9 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
    * once.
    */
   def innerJoin[ED2: ClassTag, ED3: ClassTag]
-      (other: EdgePartition[ED2])
-      (f: (VertexId, VertexId, ED, ED2) => ED3): EdgePartition[ED3] = {
-    val builder = new EdgePartitionBuilder[ED3]
+      (other: EdgePartition[ED2, _])
+      (f: (VertexId, VertexId, ED, ED2) => ED3): EdgePartition[ED3, VD] = {
+    val builder = new EdgePartitionBuilder[ED3, VD]
     var i = 0
     var j = 0
     // For i = index of each edge in `this`...
@@ -175,7 +224,7 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
       }
       i += 1
     }
-    builder.toEdgePartition
+    builder.toEdgePartition.withVertexPartition(vertexPartition).withActiveSet(activeSet)
   }
 
   /**
@@ -211,6 +260,44 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
     }
   }
 
+  // TODO: make a version that reuses objects
+  def tripletIterator(
+      includeSrc: Boolean = true, includeDst: Boolean = true): Iterator[EdgeTriplet[VD, ED]] = {
+    new EdgeTripletIterator(vertexPartition.index, vertexPartition.values, this,
+      includeSrc, includeDst)
+  }
+
+  def upgradeIterator(
+      edgeIter: Iterator[Edge[ED]], includeSrc: Boolean = true, includeDst: Boolean = true)
+    : Iterator[EdgeTriplet[VD, ED]] = {
+    val tripletIter = new Iterator[EdgeTriplet[VD, ED]] {
+      private[this] val triplet = new EdgeTriplet[VD, ED]
+      override def hasNext = edgeIter.hasNext
+      override def next() = {
+        triplet.set(edgeIter.next())
+      }
+    }
+    val withSrc =
+      if (includeSrc) {
+        tripletIter.map { triplet =>
+          triplet.srcAttr = EdgePartition.this.vertexPartition(triplet.srcId)
+          triplet
+        }
+      } else {
+        tripletIter
+      }
+    val withDst =
+      if (includeDst) {
+        withSrc.map { triplet =>
+          triplet.dstAttr = EdgePartition.this.vertexPartition(triplet.dstId)
+          triplet
+        }
+      } else {
+        withSrc
+      }
+    withDst
+  }
+
   /**
    * Get an iterator over the edges in this partition whose source vertex ids match srcIdPred. The
    * iterator is generated using an index scan, so it is efficient at skipping edges that don't
@@ -243,4 +330,6 @@ class EdgePartition[@specialized(Char, Int, Boolean, Byte, Long, Float, Double) 
       edge
     }
   }
+
+  def vidIterator: Iterator[VertexId] = vertexPartition.index.iterator
 }
