@@ -30,7 +30,7 @@ private[graphx] object RoutingTablePartition {
   val empty: RoutingTablePartition = new RoutingTablePartition(Array.empty)
 
   def edgePartitionToMsgs(pid: PartitionID, edgePartition: EdgePartition[_, _])
-    : Iterator[(VertexId, (PartitionID, Byte))] = {
+    : Iterator[RoutingTableMessage] = {
     // Determine which positions each vertex id appears in using a map where the low 2 bits
     // represent src and dst
     val map = new PrimitiveKeyOpenHashMap[VertexId, Byte]
@@ -40,18 +40,18 @@ private[graphx] object RoutingTablePartition {
     edgePartition.dstIds.iterator.foreach { dstId =>
       map.changeValue(dstId, 0x2, (b: Byte) => (b | 0x2).toByte)
     }
-    map.iterator.map { case (vid, byte) => (vid, (pid, byte)) }
+    map.iterator.map { case (vid, position) => new RoutingTableMessage(vid, pid, position) }
   }
 
-  def fromMsgs(numEdgePartitions: Int, iter: Iterator[(VertexId, (PartitionID, Byte))])
+  def fromMsgs(numEdgePartitions: Int, iter: Iterator[RoutingTableMessage])
     : RoutingTablePartition = {
     val pid2vid = Array.fill(numEdgePartitions)(new PrimitiveVector[VertexId])
     val srcFlags = Array.fill(numEdgePartitions)(new PrimitiveVector[Boolean])
     val dstFlags = Array.fill(numEdgePartitions)(new PrimitiveVector[Boolean])
-    for ((vid, (pid, byte)) <- iter) {
-      pid2vid(pid) += vid
-      srcFlags(pid) += (byte & 0x1) != 0
-      dstFlags(pid) += (byte & 0x2) != 0
+    for (msg <- iter) {
+      pid2vid(msg.pid) += msg.vid
+      srcFlags(msg.pid) += (msg.position & 0x1) != 0
+      dstFlags(msg.pid) += (msg.position & 0x2) != 0
     }
 
     new RoutingTablePartition(pid2vid.zipWithIndex.map {

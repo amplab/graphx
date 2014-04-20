@@ -26,6 +26,8 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util.collection.PrimitiveVector
 
 import org.apache.spark.graphx.impl.MsgRDDFunctions
+import org.apache.spark.graphx.impl.RoutingTableMessage
+import org.apache.spark.graphx.impl.RoutingTableMessageRDDFunctions._
 import org.apache.spark.graphx.impl.RoutingTablePartition
 import org.apache.spark.graphx.impl.ShippableVertexPartition
 import org.apache.spark.graphx.impl.VertexAttributeBlock
@@ -394,8 +396,7 @@ object VertexRDD {
       .setName("VertexRDD.createRoutingTables - vid2pid (aggregation)")
 
     val numEdgePartitions = edges.partitions.size
-    // TODO: use a custom serializer
-    vid2pid.partitionBy(vertexPartitioner).mapPartitions(
+    vid2pid.copartitionWithVertices(vertexPartitioner).mapPartitions(
       iter => Iterator(RoutingTablePartition.fromMsgs(numEdgePartitions, iter)),
       preservesPartitioning = true)
   }
