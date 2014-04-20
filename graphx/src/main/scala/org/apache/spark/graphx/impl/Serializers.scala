@@ -44,7 +44,8 @@ class RoutingTableMessageSerializer extends Serializer with Serializable {
         val a = readVarLong(optimizePositive = false)
         val b = readUnsignedVarInt()
         val c = s.read()
-        new RoutingTableMessage(a, b, c).asInstanceOf[T]
+        if (c == -1) throw new EOFException
+        new RoutingTableMessage(a, b, c.toByte).asInstanceOf[T]
       }
     }
   }

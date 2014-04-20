@@ -28,6 +28,7 @@ import org.apache.spark.util.collection.PrimitiveVector
 import org.apache.spark.graphx.impl.MsgRDDFunctions
 import org.apache.spark.graphx.impl.RoutingTableMessage
 import org.apache.spark.graphx.impl.RoutingTableMessageRDDFunctions._
+import org.apache.spark.graphx.impl.VertexRDDFunctions._
 import org.apache.spark.graphx.impl.RoutingTablePartition
 import org.apache.spark.graphx.impl.ShippableVertexPartition
 import org.apache.spark.graphx.impl.VertexAttributeBlock
@@ -227,7 +228,7 @@ class VertexRDD[@specialized VD: ClassTag](
       case _ =>
         new VertexRDD[VD3](
           partitionsRDD.zipPartitions(
-            other.partitionBy(this.partitioner.get), preservesPartitioning = true) {
+            other.copartitionWithVertices(this.partitioner.get), preservesPartitioning = true) {
             (partIter, msgs) => partIter.map(_.leftJoin(msgs)(f))
           }
         )
@@ -271,7 +272,7 @@ class VertexRDD[@specialized VD: ClassTag](
       case _ =>
         new VertexRDD(
           partitionsRDD.zipPartitions(
-            other.partitionBy(this.partitioner.get), preservesPartitioning = true) {
+            other.copartitionWithVertices(this.partitioner.get), preservesPartitioning = true) {
             (partIter, msgs) => partIter.map(_.innerJoin(msgs)(f))
           }
         )
@@ -291,7 +292,7 @@ class VertexRDD[@specialized VD: ClassTag](
    */
   def aggregateUsingIndex[VD2: ClassTag](
       messages: RDD[(VertexId, VD2)], reduceFunc: (VD2, VD2) => VD2): VertexRDD[VD2] = {
-    val shuffled = MsgRDDFunctions.partitionForAggregation(messages, this.partitioner.get)
+    val shuffled = messages.copartitionWithVertices(this.partitioner.get)
     val parts = partitionsRDD.zipPartitions(shuffled, true) { (thisIter, msgIter) =>
       thisIter.map(_.aggregateUsingIndex(msgIter, reduceFunc))
     }
@@ -329,7 +330,7 @@ object VertexRDD {
   def apply[VD: ClassTag](vertices: RDD[(VertexId, VD)]): VertexRDD[VD] = {
     val vPartitioned: RDD[(VertexId, VD)] = vertices.partitioner match {
       case Some(p) => vertices
-      case None => vertices.partitionBy(new HashPartitioner(vertices.partitions.size))
+      case None => vertices.copartitionWithVertices(new HashPartitioner(vertices.partitions.size))
     }
     val vertexPartitions = vPartitioned.mapPartitions(
       iter => Iterator(ShippableVertexPartition(iter)),
@@ -356,7 +357,7 @@ object VertexRDD {
     ): VertexRDD[VD] = {
     val vPartitioned: RDD[(VertexId, VD)] = vertices.partitioner match {
       case Some(p) => vertices
-      case None => vertices.partitionBy(new HashPartitioner(vertices.partitions.size))
+      case None => vertices.copartitionWithVertices(new HashPartitioner(vertices.partitions.size))
     }
     val routingTables = createRoutingTables(edges, vPartitioned.partitioner.get)
     val vertexPartitions = vPartitioned.zipPartitions(routingTables, preservesPartitioning = true) {
