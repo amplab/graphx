@@ -19,6 +19,7 @@ package org.apache.spark.graphx.impl
 
 import scala.reflect.{classTag, ClassTag}
 
+import org.apache.spark.Logging
 import org.apache.spark.SparkContext._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.util.collection.{PrimitiveVector, OpenHashSet}
@@ -38,175 +39,74 @@ import org.apache.spark.graphx._
  * [[org.apache.spark.graphx.Pregel]] for an example.
  */
 private[impl]
-class ReplicatedVertexView[VD: ClassTag](
-    updatedVerts: VertexRDD[VD],
-    edges: EdgeRDD[_],
-    routingTable: RoutingTable,
-    prevViewOpt: Option[ReplicatedVertexView[VD]] = None) {
+class ReplicatedVertexView[VD: ClassTag, ED: ClassTag](
+    var edges: EdgeRDD[ED, VD],
+    var hasSrcId: Boolean = false,
+    var hasDstId: Boolean = false) extends Logging {
 
-  /**
-   * Within each edge partition, create a local map from vid to an index into the attribute
-   * array. Each map contains a superset of the vertices that it will receive, because it stores
-   * vids from both the source and destination of edges. It must always include both source and
-   * destination vids because some operations, such as GraphImpl.mapReduceTriplets, rely on this.
-   */
-  private val localVertexIdMap: RDD[(Int, VertexIdToIndexMap)] = prevViewOpt match {
-    case Some(prevView) =>
-      prevView.localVertexIdMap
-    case None =>
-      edges.partitionsRDD.mapPartitions(_.map {
-        case (pid, epart) =>
-          val vidToIndex = new VertexIdToIndexMap
-          epart.foreach { e =>
-            vidToIndex.add(e.srcId)
-            vidToIndex.add(e.dstId)
-          }
-          (pid, vidToIndex)
-      }, preservesPartitioning = true).cache().setName("ReplicatedVertexView localVertexIdMap")
+  def withEdges[VD2: ClassTag, ED2: ClassTag](
+      edges_ : EdgeRDD[ED2, VD2]): ReplicatedVertexView[VD2, ED2] = {
+    new ReplicatedVertexView(edges_, hasSrcId, hasDstId)
   }
 
-  private lazy val bothAttrs: RDD[(PartitionID, VertexPartition[VD])] = create(true, true)
-  private lazy val srcAttrOnly: RDD[(PartitionID, VertexPartition[VD])] = create(true, false)
-  private lazy val dstAttrOnly: RDD[(PartitionID, VertexPartition[VD])] = create(false, true)
-  private lazy val noAttrs: RDD[(PartitionID, VertexPartition[VD])] = create(false, false)
-
-  def unpersist(blocking: Boolean = true): ReplicatedVertexView[VD] = {
-    bothAttrs.unpersist(blocking)
-    srcAttrOnly.unpersist(blocking)
-    dstAttrOnly.unpersist(blocking)
-    noAttrs.unpersist(blocking)
-    // Don't unpersist localVertexIdMap because a future ReplicatedVertexView may be using it
-    // without modification
-    this
-  }
-
-  def get(includeSrc: Boolean, includeDst: Boolean): RDD[(PartitionID, VertexPartition[VD])] = {
-    (includeSrc, includeDst) match {
-      case (true, true) => bothAttrs
-      case (true, false) => srcAttrOnly
-      case (false, true) => dstAttrOnly
-      case (false, false) => noAttrs
+  def upgrade(vertices: VertexRDD[VD], includeSrc: Boolean, includeDst: Boolean) {
+    val shipSrc = includeSrc && !hasSrcId
+    val shipDst = includeDst && !hasDstId
+    if (shipSrc || shipDst) {
+      val shippedVerts: RDD[(Int, VertexAttributeBlock[VD])] =
+        vertices.shipVertexAttributes(shipSrc, shipDst)
+          .setName("ReplicatedVertexView.upgrade(%s, %s) - shippedVerts %s %s (broadcast)".format(
+            includeSrc, includeDst, shipSrc, shipDst))
+          .partitionBy(edges.partitioner.get)
+      val newEdges = new EdgeRDD(edges.partitionsRDD.zipPartitions(shippedVerts) {
+        (ePartIter, shippedVertsIter) => ePartIter.map {
+          case (pid, edgePartition) =>
+            (pid, edgePartition.updateVertices(shippedVertsIter.flatMap(_._2.iterator)))
+        }
+      })
+      edges = newEdges
+      hasSrcId = includeSrc
+      hasDstId = includeDst
     }
   }
 
-  def get(
-      includeSrc: Boolean,
-      includeDst: Boolean,
-      actives: VertexRDD[_]): RDD[(PartitionID, VertexPartition[VD])] = {
+  def withActiveSet(actives: VertexRDD[_]): ReplicatedVertexView[VD, ED] = {
     // Ship active sets to edge partitions using vertexPlacement, but ignoring includeSrc and
     // includeDst. These flags govern attribute shipping, but the activeness of a vertex must be
     // shipped to all edges mentioning that vertex, regardless of whether the vertex attribute is
     // also shipped there.
-    val shippedActives = routingTable.get(true, true)
-      .zipPartitions(actives.partitionsRDD)(ReplicatedVertexView.buildActiveBuffer(_, _))
+    val shippedActives = actives.shipVertexIds()
+      .setName("ReplicatedVertexView.withActiveSet - shippedActives (broadcast)")
       .partitionBy(edges.partitioner.get)
+
     // Update the view with shippedActives, setting activeness flags in the resulting
     // VertexPartitions
-    get(includeSrc, includeDst).zipPartitions(shippedActives) { (viewIter, shippedActivesIter) =>
-      val (pid, vPart) = viewIter.next()
-      val newPart = vPart.replaceActives(shippedActivesIter.flatMap(_._2.iterator))
-      Iterator((pid, newPart))
-    }
+    val newEdges = new EdgeRDD(edges.partitionsRDD.zipPartitions(shippedActives) {
+      (ePartIter, shippedActivesIter) => ePartIter.map {
+        case (pid, edgePartition) =>
+          (pid, edgePartition.withActiveSet(shippedActivesIter.flatMap(_._2.iterator)))
+      }
+    })
+
+    new ReplicatedVertexView(newEdges, hasSrcId, hasDstId)
   }
 
-  private def create(includeSrc: Boolean, includeDst: Boolean)
-    : RDD[(PartitionID, VertexPartition[VD])] = {
-    val vdTag = classTag[VD]
-
+  def updateVertices(updates: VertexRDD[VD]): ReplicatedVertexView[VD, ED] = {
     // Ship vertex attributes to edge partitions according to vertexPlacement
-    val verts = updatedVerts.partitionsRDD
-    val shippedVerts = routingTable.get(includeSrc, includeDst)
-      .zipPartitions(verts)(ReplicatedVertexView.buildBuffer(_, _)(vdTag))
+    val shippedVerts = updates.shipVertexAttributes(hasSrcId, hasDstId)
+      .setName("ReplicatedVertexView.updateVertices - shippedVerts %s %s (broadcast)".format(
+        hasSrcId, hasDstId))
       .partitionBy(edges.partitioner.get)
-    // TODO: Consider using a specialized shuffler.
 
-    prevViewOpt match {
-      case Some(prevView) =>
-        // Update prevView with shippedVerts, setting staleness flags in the resulting
-        // VertexPartitions
-        prevView.get(includeSrc, includeDst).zipPartitions(shippedVerts) {
-          (prevViewIter, shippedVertsIter) =>
-            val (pid, prevVPart) = prevViewIter.next()
-            val newVPart = prevVPart.innerJoinKeepLeft(shippedVertsIter.flatMap(_._2.iterator))
-            Iterator((pid, newVPart))
-        }.cache().setName("ReplicatedVertexView delta %s %s".format(includeSrc, includeDst))
-
-      case None =>
-        // Within each edge partition, place the shipped vertex attributes into the correct
-        // locations specified in localVertexIdMap
-        localVertexIdMap.zipPartitions(shippedVerts) { (mapIter, shippedVertsIter) =>
-          val (pid, vidToIndex) = mapIter.next()
-          assert(!mapIter.hasNext)
-          // Populate the vertex array using the vidToIndex map
-          val vertexArray = vdTag.newArray(vidToIndex.capacity)
-          for ((_, block) <- shippedVertsIter) {
-            for (i <- 0 until block.vids.size) {
-              val vid = block.vids(i)
-              val attr = block.attrs(i)
-              val ind = vidToIndex.getPos(vid)
-              vertexArray(ind) = attr
-            }
-          }
-          val newVPart = new VertexPartition(
-            vidToIndex, vertexArray, vidToIndex.getBitSet)(vdTag)
-          Iterator((pid, newVPart))
-        }.cache().setName("ReplicatedVertexView %s %s".format(includeSrc, includeDst))
-    }
-  }
-}
-
-private object ReplicatedVertexView {
-  protected def buildBuffer[VD: ClassTag](
-      pid2vidIter: Iterator[Array[Array[VertexId]]],
-      vertexPartIter: Iterator[VertexPartition[VD]]) = {
-    val pid2vid: Array[Array[VertexId]] = pid2vidIter.next()
-    val vertexPart: VertexPartition[VD] = vertexPartIter.next()
-
-    Iterator.tabulate(pid2vid.size) { pid =>
-      val vidsCandidate = pid2vid(pid)
-      val size = vidsCandidate.length
-      val vids = new PrimitiveVector[VertexId](pid2vid(pid).size)
-      val attrs = new PrimitiveVector[VD](pid2vid(pid).size)
-      var i = 0
-      while (i < size) {
-        val vid = vidsCandidate(i)
-        if (vertexPart.isDefined(vid)) {
-          vids += vid
-          attrs += vertexPart(vid)
-        }
-        i += 1
+    // Update prevView with shippedVerts, setting staleness flags in the resulting
+    // VertexPartitions
+    val newEdges = new EdgeRDD(edges.partitionsRDD.zipPartitions(shippedVerts) {
+      (ePartIter, shippedVertsIter) => ePartIter.map {
+        case (pid, edgePartition) =>
+          (pid, edgePartition.updateVertices(shippedVertsIter.flatMap(_._2.iterator)))
       }
-      (pid, new VertexAttributeBlock(vids.trim().array, attrs.trim().array))
-    }
+    })
+
+    new ReplicatedVertexView(newEdges, hasSrcId, hasDstId)
   }
-
-  protected def buildActiveBuffer(
-      pid2vidIter: Iterator[Array[Array[VertexId]]],
-      activePartIter: Iterator[VertexPartition[_]])
-    : Iterator[(Int, Array[VertexId])] = {
-    val pid2vid: Array[Array[VertexId]] = pid2vidIter.next()
-    val activePart: VertexPartition[_] = activePartIter.next()
-
-    Iterator.tabulate(pid2vid.size) { pid =>
-      val vidsCandidate = pid2vid(pid)
-      val size = vidsCandidate.length
-      val actives = new PrimitiveVector[VertexId](vidsCandidate.size)
-      var i = 0
-      while (i < size) {
-        val vid = vidsCandidate(i)
-        if (activePart.isDefined(vid)) {
-          actives += vid
-        }
-        i += 1
-      }
-      (pid, actives.trim().array)
-    }
-  }
-}
-
-private[graphx]
-class VertexAttributeBlock[VD: ClassTag](val vids: Array[VertexId], val attrs: Array[VD])
-  extends Serializable {
-  def iterator: Iterator[(VertexId, VD)] =
-    (0 until vids.size).iterator.map { i => (vids(i), attrs(i)) }
 }

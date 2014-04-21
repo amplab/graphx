@@ -22,10 +22,12 @@ import scala.util.Sorting
 
 import org.apache.spark.graphx._
 import org.apache.spark.graphx.util.collection.PrimitiveKeyOpenHashMap
-import org.apache.spark.util.collection.PrimitiveVector
+import org.apache.spark.util.collection.{BitSet, OpenHashSet, PrimitiveVector}
 
 private[graphx]
-class EdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag](size: Int = 64) {
+class EdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag, VD: ClassTag](
+    size: Int = 64,
+    defaultVertexAttr: VD = null.asInstanceOf[VD]) {
   var edges = new PrimitiveVector[Edge[ED]](size)
 
   /** Add a new edge to the partition. */
@@ -33,7 +35,7 @@ class EdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag](size: I
     edges += Edge(src, dst, d)
   }
 
-  def toEdgePartition: EdgePartition[ED] = {
+  def toEdgePartition: EdgePartition[ED, VD] = {
     val edgeArray = edges.trim().array
     Sorting.quickSort(edgeArray)(Edge.lexicographicOrdering)
     val srcIds = new Array[VertexId](edgeArray.size)
@@ -57,6 +59,12 @@ class EdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag](size: I
         i += 1
       }
     }
-    new EdgePartition(srcIds, dstIds, data, index)
+
+    val vidsIter = srcIds.iterator ++ dstIds.iterator
+    val vertexIds = new OpenHashSet[VertexId]
+    vidsIter.foreach(vid => vertexIds.add(vid))
+    val vertexPartition = new VertexPartition(
+      vertexIds, new Array[VD](vertexIds.capacity), new BitSet(vertexIds.capacity))
+    new EdgePartition(srcIds, dstIds, data, index, vertexPartition)
   }
 }

@@ -110,7 +110,7 @@ class GraphSuite extends FunSuite with LocalSparkContext {
       val p = 100
       val verts = 1 to n
       val graph = Graph.fromEdgeTuples(sc.parallelize(verts.flatMap(x =>
-        verts.filter(y => y % x == 0).map(y => (x: VertexId, y: VertexId))), p), 0)
+        verts.withFilter(y => y % x == 0).map(y => (x: VertexId, y: VertexId))), p), 0)
       assert(graph.edges.partitions.length === p)
       val partitionedGraph = graph.partitionBy(EdgePartition2D)
       assert(graph.edges.partitions.length === p)
@@ -120,7 +120,13 @@ class GraphSuite extends FunSuite with LocalSparkContext {
         val part = iter.next()._2
         Iterator((part.srcIds ++ part.dstIds).toSet)
       }.collect
-      assert(verts.forall(id => partitionSets.count(_.contains(id)) <= bound))
+      if (!verts.forall(id => partitionSets.count(_.contains(id)) <= bound)) {
+        val numFailures = verts.count(id => partitionSets.count(_.contains(id)) > bound)
+        val failure = verts.maxBy(id => partitionSets.count(_.contains(id)))
+        fail(("Replication bound test failed for %d/%d vertices. " +
+          "Example: vertex %d replicated to %d (> %f) partitions.").format(
+          numFailures, n, failure, partitionSets.count(_.contains(failure)), bound))
+      }
       // This should not be true for the default hash partitioning
       val partitionSetsUnpartitioned = graph.edges.partitionsRDD.mapPartitions { iter =>
         val part = iter.next()._2
@@ -284,6 +290,18 @@ class GraphSuite extends FunSuite with LocalSparkContext {
         reverseStar.outerJoinVertices(messages) { (vid, a, bOpt) => a + bOpt.getOrElse("") }
       assert(newReverseStar.vertices.map(_._2).collect.toSet ===
         (0 to n).map(x => "v%d".format(x)).toSet)
+    }
+  }
+
+  test("more edge partitions than vertex partitions") {
+    withSpark { sc =>
+      val verts = sc.parallelize(List((1: VertexId, "a"), (2: VertexId, "b")), 1)
+      val edges = sc.parallelize(List(Edge(1, 2, 0), Edge(2, 1, 0)), 2)
+      val graph = Graph(verts, edges)
+      val triplets = graph.triplets.map(et => (et.srcId, et.dstId, et.srcAttr, et.dstAttr))
+        .collect.toSet
+      assert(triplets ===
+        Set((1: VertexId, 2: VertexId, "a", "b"), (2: VertexId, 1: VertexId, "b", "a")))
     }
   }
 

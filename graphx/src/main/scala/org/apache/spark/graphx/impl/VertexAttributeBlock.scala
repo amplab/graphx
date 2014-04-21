@@ -17,27 +17,18 @@
 
 package org.apache.spark.graphx.impl
 
-import scala.reflect.ClassTag
-import scala.util.Random
+import scala.reflect.{classTag, ClassTag}
 
-import org.scalatest.FunSuite
+import org.apache.spark.Logging
+import org.apache.spark.SparkContext._
+import org.apache.spark.rdd.RDD
+import org.apache.spark.util.collection.{PrimitiveVector, OpenHashSet}
 
 import org.apache.spark.graphx._
 
-class EdgeTripletIteratorSuite extends FunSuite {
-  test("iterator.toList") {
-    val builder = new EdgePartitionBuilder[Int, Int]
-    builder.add(1, 2, 0)
-    builder.add(1, 3, 0)
-    builder.add(1, 4, 0)
-    val vidmap = new VertexIdToIndexMap
-    vidmap.add(1)
-    vidmap.add(2)
-    vidmap.add(3)
-    vidmap.add(4)
-    val vs = Array.fill(vidmap.capacity)(0)
-    val iter = new EdgeTripletIterator[Int, Int](vidmap, vs, builder.toEdgePartition, true, true)
-    val result = iter.toList.map(et => (et.srcId, et.dstId))
-    assert(result === Seq((1, 2), (1, 3), (1, 4)))
-  }
+private[graphx]
+class VertexAttributeBlock[VD: ClassTag](val vids: Array[VertexId], val attrs: Array[VD])
+  extends Serializable {
+  def iterator: Iterator[(VertexId, VD)] =
+    (0 until vids.size).iterator.map { i => (vids(i), attrs(i)) }
 }

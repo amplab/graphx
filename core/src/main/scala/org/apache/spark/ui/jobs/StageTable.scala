@@ -76,7 +76,7 @@ private[ui] class StageTable(stages: Seq[StageInfo], parent: JobProgressUI) {
     val poolName = listener.stageIdToPool.get(s.stageId)
     val nameLink =
       <a href={"%s/stages/stage?id=%s".format(UIUtils.prependBaseUri(basePath), s.stageId)}>
-        {s.name}
+        {s.name + " (%s)".format(s.rddInfo.name)}
       </a>
     val description = listener.stageIdToDescription.get(s.stageId)
       .map(d => <div><em>{d}</em></div><div>{nameLink}</div>).getOrElse(nameLink)
