@@ -22,7 +22,7 @@ import scala.util.Sorting
 
 import org.apache.spark.graphx._
 import org.apache.spark.graphx.util.collection.PrimitiveKeyOpenHashMap
-import org.apache.spark.util.collection.PrimitiveVector
+import org.apache.spark.util.collection.{BitSet, OpenHashSet, PrimitiveVector}
 
 private[graphx]
 class EdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag, VD: ClassTag](
@@ -60,8 +60,11 @@ class EdgePartitionBuilder[@specialized(Long, Int, Double) ED: ClassTag, VD: Cla
       }
     }
 
-    val vertexIds = srcIds.iterator ++ dstIds.iterator
-    val vertexPartition = VertexPartition(vertexIds.map(vid => (vid, defaultVertexAttr)))
+    val vidsIter = srcIds.iterator ++ dstIds.iterator
+    val vertexIds = new OpenHashSet[VertexId]
+    vidsIter.foreach(vid => vertexIds.add(vid))
+    val vertexPartition = new VertexPartition(
+      vertexIds, new Array[VD](vertexIds.capacity), new BitSet(vertexIds.capacity))
     new EdgePartition(srcIds, dstIds, data, index, vertexPartition)
   }
 }
