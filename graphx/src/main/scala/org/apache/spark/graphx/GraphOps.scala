@@ -372,4 +372,12 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali
   def stronglyConnectedComponents(numIter: Int): Graph[VertexId, ED] = {
     StronglyConnectedComponents.run(graph, numIter)
   }
+
+  def globalClusteringCoefficient(): Float = {
+    GlobalClusteringCoefficient.run(graph)
+  }
+
+  def sampleTriangle(p: Double): Double = {
+    SampleTriangle.run(graph, p)
+  }
 } // end of GraphOps
