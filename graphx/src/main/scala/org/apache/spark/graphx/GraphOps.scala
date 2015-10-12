@@ -373,6 +373,11 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali
     StronglyConnectedComponents.run(graph, numIter)
   }
 
+
+  def sampleTriangle(p: Double): Double = {
+    SampleTriangle.run(graph, p)
+  }
+
   /**
    * Compute the local clustering coefficient for each vertex
    *
