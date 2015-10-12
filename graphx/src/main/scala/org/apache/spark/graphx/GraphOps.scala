@@ -380,4 +380,8 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali
   def sampleTriangle(p: Double): Double = {
     SampleTriangle.run(graph, p)
   }
+
+  def localClusteringCoefficient(): Graph[Double, ED] = {
+    LocalClusteringCoefficient.run(graph)
+  }
 } // end of GraphOps
