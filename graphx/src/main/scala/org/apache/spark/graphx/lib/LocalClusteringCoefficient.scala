@@ -33,7 +33,8 @@ import scala.collection.mutable.ListBuffer
  * C_i = |{e_jk: v_j, v_k \in N_i, e_jk \in E}| / (K_i * (K_i - 1))
  * where K_i=|N_i| is the number of neighbors of v_i
  *
- * Note that the input graph must have been partitioned using [[org.apache.spark.graphx.Graph#partitionBy]].
+ * Note that the input graph must have been partitioned using
+ * [[org.apache.spark.graphx.Graph#partitionBy]].
  */
 object LocalClusteringCoefficient {
   /**
@@ -42,7 +43,8 @@ object LocalClusteringCoefficient {
    *
    * @param graph the graph for which to compute the connected components
    *
-   * @return a graph with vertex attributes containing the local clustering coefficient of that vertex
+   * @return a graph with vertex attributes containing
+   *         the local clustering coefficient of that vertex
    *
    */
   def run[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]): Graph[Double, ED] = {
@@ -104,10 +106,12 @@ object LocalClusteringCoefficient {
       (vid, _, optCounter: Option[Double]) =>
         val dblCount: Double = optCounter.getOrElse(0)
         val nbNum = nbNumMap(vid)
-        if (nbNum > 1)
+        if (nbNum > 1) {
           dblCount / (nbNum * (nbNum - 1))
-        else
+        }
+        else {
           0
+        }
     }
   }
 }
