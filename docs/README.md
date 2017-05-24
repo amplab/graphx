@@ -16,7 +16,7 @@ To use the `jekyll` command, you will need to have Jekyll installed.
 The easiest way to do this is via a Ruby Gem, see the 
 [jekyll installation instructions](http://jekyllrb.com/docs/installation). 
 Compiling the site with Jekyll will create a directory called 
-_site containing index.html as well as the rest of the compiled files.
+_site containing index.md as well as the rest of the compiled files.
 
 You can modify the default Jekyll build as follows:
 

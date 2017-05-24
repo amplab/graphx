@@ -31,7 +31,7 @@ In addition, if you wish to access an HDFS cluster, you need to add a dependency
     artifactId = hadoop-client
     version = <your-hdfs-version>
 
-For other build systems, you can run `sbt/sbt assembly` to pack Spark and its dependencies into one JAR (`assembly/target/scala-{{site.SCALA_BINARY_VERSION}}/spark-assembly-{{site.SPARK_VERSION}}-hadoop*.jar`), then add this to your CLASSPATH. Set the HDFS version as described [here](index.html#a-note-about-hadoop-versions).
+For other build systems, you can run `sbt/sbt assembly` to pack Spark and its dependencies into one JAR (`assembly/target/scala-{{site.SCALA_BINARY_VERSION}}/spark-assembly-{{site.SPARK_VERSION}}-hadoop*.jar`), then add this to your CLASSPATH. Set the HDFS version as described [here](index.md#a-note-about-hadoop-versions).
 
 Finally, you need to import some Spark classes and implicit conversions into your program. Add the following lines:
 
@@ -49,7 +49,7 @@ This is done through the following constructor:
 new SparkContext(master, appName, [sparkHome], [jars])
 {% endhighlight %}
 
-or through `new SparkContext(conf)`, which takes a [SparkConf](api/core/index.html#org.apache.spark.SparkConf)
+or through `new SparkContext(conf)`, which takes a [SparkConf](api/core/index.md#org.apache.spark.SparkConf)
 object for more advanced configuration.
 
 The `master` parameter is a string specifying a [Spark or Mesos cluster URL](#master-urls) to connect to, or a special "local" string to run in local mode, as described below. `appName` is a name for your application, which will be shown in the cluster web UI. Finally, the last two parameters are needed to deploy your code to a cluster if running in distributed mode, as described later.
@@ -76,10 +76,10 @@ The master URL passed to Spark can be in one of the following formats:
 <tr><td> local[K] </td><td> Run Spark locally with K worker threads (ideally, set this to the number of cores on your machine).
 <tr><td> local[*] </td><td> Run Spark locally with as many worker threads as logical cores on your machine.</td></tr>
 </td></tr>
-<tr><td> spark://HOST:PORT </td><td> Connect to the given <a href="spark-standalone.html">Spark standalone
+<tr><td> spark://HOST:PORT </td><td> Connect to the given <a href="spark-standalone.md">Spark standalone
         cluster</a> master. The port must be whichever one your master is configured to use, which is 7077 by default.
 </td></tr>
-<tr><td> mesos://HOST:PORT </td><td> Connect to the given <a href="running-on-mesos.html">Mesos</a> cluster.
+<tr><td> mesos://HOST:PORT </td><td> Connect to the given <a href="running-on-mesos.md">Mesos</a> cluster.
         The host parameter is the hostname of the Mesos master. The port must be whichever one the master is configured to use,
         which is 5050 by default.
 </td></tr>
@@ -87,7 +87,7 @@ The master URL passed to Spark can be in one of the following formats:
 
 If no master URL is specified, the spark shell defaults to "local[*]".
 
-For running on YARN, Spark launches an instance of the standalone deploy cluster within YARN; see [running on YARN](running-on-yarn.html) for details.
+For running on YARN, Spark launches an instance of the standalone deploy cluster within YARN; see [running on YARN](running-on-yarn.md) for details.
 
 ### Deploying Code on a Cluster
 
@@ -145,7 +145,7 @@ All transformations in Spark are <i>lazy</i>, in that they do not compute their 
 
 By default, each transformed RDD is recomputed each time you run an action on it. However, you may also *persist* an RDD in memory using the `persist` (or `cache`) method, in which case Spark will keep the elements around on the cluster for much faster access the next time you query it. There is also support for persisting datasets on disk, or replicated across the cluster. The next section in this document describes these options.
 
-The following tables list the transformations and actions currently supported (see also the [RDD API doc](api/core/index.html#org.apache.spark.rdd.RDD) for details):
+The following tables list the transformations and actions currently supported (see also the [RDD API doc](api/core/index.md#org.apache.spark.rdd.RDD) for details):
 
 ### Transformations
 
@@ -214,7 +214,7 @@ The following tables list the transformations and actions currently supported (s
 </tr>
 </table>
 
-A complete list of transformations is available in the [RDD API doc](api/core/index.html#org.apache.spark.rdd.RDD).
+A complete list of transformations is available in the [RDD API doc](api/core/index.md#org.apache.spark.rdd.RDD).
 
 ### Actions
 
@@ -262,7 +262,7 @@ A complete list of transformations is available in the [RDD API doc](api/core/in
 </tr>
 </table>
 
-A complete list of actions is available in the [RDD API doc](api/core/index.html#org.apache.spark.rdd.RDD).
+A complete list of actions is available in the [RDD API doc](api/core/index.md#org.apache.spark.rdd.RDD).
 
 ## RDD Persistence
 
@@ -281,7 +281,7 @@ In addition, each RDD can be stored using a different *storage level*, allowing 
 persist the dataset on disk, or persist it in memory but as serialized Java objects (to save space),
 or replicate it across nodes, or store the data in off-heap memory in [Tachyon](http://tachyon-project.org/).
 These levels are chosen by passing a
-[`org.apache.spark.storage.StorageLevel`](api/core/index.html#org.apache.spark.storage.StorageLevel)
+[`org.apache.spark.storage.StorageLevel`](api/core/index.md#org.apache.spark.storage.StorageLevel)
 object to `persist()`. The `cache()` method is a shorthand for using the default storage level,
 which is `StorageLevel.MEMORY_ONLY` (store deserialized objects in memory). The complete set of
 available storage levels is:
@@ -302,7 +302,7 @@ available storage levels is:
   <td> MEMORY_ONLY_SER </td>
   <td> Store RDD as <i>serialized</i> Java objects (one byte array per partition).
     This is generally more space-efficient than deserialized objects, especially when using a
-    <a href="tuning.html">fast serializer</a>, but more CPU-intensive to read.
+    <a href="tuning.md">fast serializer</a>, but more CPU-intensive to read.
   </td>
 </tr>
 <tr>
@@ -314,7 +314,7 @@ available storage levels is:
   <td> OFF_HEAP  </td>
   <td> Store RDD in a <i>serialized</i> format in Tachyon.
     This is generally more space-efficient than deserialized objects, especially when using a
-    <a href="tuning.html">fast serializer</a>, but more CPU-intensive to read.
+    <a href="tuning.md">fast serializer</a>, but more CPU-intensive to read.
     This also significantly reduces the overheads of GC.
   </td>
 </tr>
@@ -337,7 +337,7 @@ through the following process to select one:
 * If your RDDs fit comfortably with the default storage level (`MEMORY_ONLY`), leave them that way.
   This is the most CPU-efficient option, allowing operations on the RDDs to run as fast as possible.
 
-* If not, try using `MEMORY_ONLY_SER` and [selecting a fast serialization library](tuning.html) to
+* If not, try using `MEMORY_ONLY_SER` and [selecting a fast serialization library](tuning.md) to
 make the objects much more space-efficient, but still reasonably fast to access. You can also use
 `OFF_HEAP` mode to store the data off the heap in [Tachyon](http://tachyon-project.org/). This will
 significantly reduce JVM GC overhead.
@@ -353,7 +353,7 @@ waiting to recompute a lost partition.
 
 If you want to define your own storage level (say, with replication factor of 3 instead of 2), then
 use the function factor method `apply()` of the
-[`StorageLevel`](api/core/index.html#org.apache.spark.storage.StorageLevel$) singleton object.
+[`StorageLevel`](api/core/index.md#org.apache.spark.storage.StorageLevel$) singleton object.
 
 Spark has a block manager inside the Executors that let you chose memory, disk, or off-heap. The
 latter is for storing RDDs off-heap outside the Executor JVM on top of the memory management system
@@ -432,6 +432,6 @@ In addition, Spark includes several samples in `examples/src/main/scala`. Some o
 
 Each example program prints usage help when run without any arguments.
 
-For help on optimizing your program, the [configuration](configuration.html) and
-[tuning](tuning.html) guides provide information on best practices. They are especially important for
+For help on optimizing your program, the [configuration](configuration.md) and
+[tuning](tuning.md) guides provide information on best practices. They are especially important for
 making sure that your data is stored in memory in an efficient format.

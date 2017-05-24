@@ -7,7 +7,7 @@ title: Quick Start
 {:toc}
 
 This tutorial provides a quick introduction to using Spark. We will first introduce the API through Spark's interactive Scala shell (don't worry if you don't know Scala -- you will not need much for this), then show how to write standalone applications in Scala, Java, and Python.
-See the [programming guide](scala-programming-guide.html) for a more complete reference.
+See the [programming guide](scala-programming-guide.md) for a more complete reference.
 
 To follow along with this guide, you only need to have successfully built Spark on one machine. Simply go into your Spark directory and run:
 
@@ -29,7 +29,7 @@ scala> val textFile = sc.textFile("README.md")
 textFile: spark.RDD[String] = spark.MappedRDD@2ee9b6e3
 {% endhighlight %}
 
-RDDs have _[actions](scala-programming-guide.html#actions)_, which return values, and _[transformations](scala-programming-guide.html#transformations)_, which return pointers to new RDDs. Let's start with a few actions:
+RDDs have _[actions](scala-programming-guide.md#actions)_, which return values, and _[transformations](scala-programming-guide.md#transformations)_, which return pointers to new RDDs. Let's start with a few actions:
 
 {% highlight scala %}
 scala> textFile.count() // Number of items in this RDD
@@ -39,7 +39,7 @@ scala> textFile.first() // First item in this RDD
 res1: String = # Apache Spark
 {% endhighlight %}
 
-Now let's use a transformation. We will use the [`filter`](scala-programming-guide.html#transformations) transformation to return a new RDD with a subset of the items in the file.
+Now let's use a transformation. We will use the [`filter`](scala-programming-guide.md#transformations) transformation to return a new RDD with a subset of the items in the file.
 
 {% highlight scala %}
 scala> val linesWithSpark = textFile.filter(line => line.contains("Spark"))
@@ -78,7 +78,7 @@ scala> val wordCounts = textFile.flatMap(line => line.split(" ")).map(word => (w
 wordCounts: spark.RDD[(java.lang.String, Int)] = spark.ShuffledAggregatedRDD@71f027b8
 {% endhighlight %}
 
-Here, we combined the [`flatMap`](scala-programming-guide.html#transformations), [`map`](scala-programming-guide.html#transformations) and [`reduceByKey`](scala-programming-guide.html#transformations) transformations to compute the per-word counts in the file as an RDD of (String, Int) pairs. To collect the word counts in our shell, we can use the [`collect`](scala-programming-guide.html#actions) action:
+Here, we combined the [`flatMap`](scala-programming-guide.md#transformations), [`map`](scala-programming-guide.md#transformations) and [`reduceByKey`](scala-programming-guide.md#transformations) transformations to compute the per-word counts in the file as an RDD of (String, Int) pairs. To collect the word counts in our shell, we can use the [`collect`](scala-programming-guide.md#actions) action:
 
 {% highlight scala %}
 scala> wordCounts.collect()
@@ -99,7 +99,7 @@ scala> linesWithSpark.count()
 res9: Long = 15
 {% endhighlight %}
 
-It may seem silly to use Spark to explore and cache a 30-line text file. The interesting part is that these same functions can be used on very large data sets, even when they are striped across tens or hundreds of nodes. You can also do this interactively by connecting `bin/spark-shell` to a cluster, as described in the [programming guide](scala-programming-guide.html#initializing-spark).
+It may seem silly to use Spark to explore and cache a 30-line text file. The interesting part is that these same functions can be used on very large data sets, even when they are striped across tens or hundreds of nodes. You can also do this interactively by connecting `bin/spark-shell` to a cluster, as described in the [programming guide](scala-programming-guide.md#initializing-spark).
 
 # A Standalone App in Scala
 Now say we wanted to write a standalone application using the Spark API. We will walk through a simple application in both Scala (with SBT), Java (with Maven), and Python. If you are using other build systems, consider using the Spark assembly JAR described in the developer guide.
@@ -193,7 +193,7 @@ public class SimpleApp {
 }
 {% endhighlight %}
 
-This program just counts the number of lines containing 'a' and the number containing 'b' in a text file. Note that you'll need to replace $YOUR_SPARK_HOME with the location where Spark is installed. As with the Scala example, we initialize a SparkContext, though we use the special `JavaSparkContext` class to get a Java-friendly one. We also create RDDs (represented by `JavaRDD`) and run transformations on them. Finally, we pass functions to Spark by creating classes that extend `spark.api.java.function.Function`. The [Java programming guide](java-programming-guide.html) describes these differences in more detail.
+This program just counts the number of lines containing 'a' and the number containing 'b' in a text file. Note that you'll need to replace $YOUR_SPARK_HOME with the location where Spark is installed. As with the Scala example, we initialize a SparkContext, though we use the special `JavaSparkContext` class to get a Java-friendly one. We also create RDDs (represented by `JavaRDD`) and run transformations on them. Finally, we pass functions to Spark by creating classes that extend `spark.api.java.function.Function`. The [Java programming guide](java-programming-guide.md) describes these differences in more detail.
 
 To build the program, we also write a Maven `pom.xml` file that lists Spark as a dependency. Note that Spark artifacts are tagged with a Scala version.
 
@@ -274,7 +274,7 @@ This program just counts the number of lines containing 'a' and the number conta
 Note that you'll need to replace $YOUR_SPARK_HOME with the location where Spark is installed. 
 As with the Scala and Java examples, we use a SparkContext to create RDDs.
 We can pass Python functions to Spark, which are automatically serialized along with any variables that they reference.
-For applications that use custom classes or third-party libraries, we can add those code dependencies to SparkContext to ensure that they will be available on remote machines; this is described in more detail in the [Python programming guide](python-programming-guide.html).
+For applications that use custom classes or third-party libraries, we can add those code dependencies to SparkContext to ensure that they will be available on remote machines; this is described in more detail in the [Python programming guide](python-programming-guide.md).
 `SimpleApp` is simple enough that we do not need to specify any code dependencies.
 
 We can run this application using the `bin/pyspark` script:
@@ -289,8 +289,8 @@ Lines with a: 46, Lines with b: 23
 # Running on a Cluster
 
 There are a few additional considerations when running applicaitons on a 
-[Spark](spark-standalone.html), [YARN](running-on-yarn.html), or 
-[Mesos](running-on-mesos.html) cluster.
+[Spark](spark-standalone.md), [YARN](running-on-yarn.md), or 
+[Mesos](running-on-mesos.md) cluster.
 
 ### Including Your Dependencies
 If your code depends on other projects, you will need to ensure they are also
@@ -308,9 +308,9 @@ For Python, you can use the `pyFiles` argument of SparkContext
 or its `addPyFile` method to add `.py`, `.zip` or `.egg` files to be distributed.
 
 ### Setting Configuration Options
-Spark includes several [configuration options](configuration.html#spark-properties)
+Spark includes several [configuration options](configuration.md#spark-properties)
 that influence the behavior of your application.
-These should be set by building a [SparkConf](api/core/index.html#org.apache.spark.SparkConf)
+These should be set by building a [SparkConf](api/core/index.md#org.apache.spark.SparkConf)
 object and passing it to the SparkContext constructor.
 For example, in Java and Scala, you can do:
 
@@ -338,5 +338,5 @@ sc = SparkContext(conf = conf)
 
 The examples here access a local file. To read data from a distributed
 filesystem, such as HDFS, include 
-[Hadoop version information](index.html#a-note-about-hadoop-versions)
+[Hadoop version information](index.md#a-note-about-hadoop-versions)
 in your build file. By default, Spark builds against HDFS 1.0.4.

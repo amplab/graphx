@@ -80,7 +80,7 @@ For all currently implemented optimization methods for classification, the data 
 distributed between processes on the worker machines *by examples*. Machines hold consecutive
 blocks of the `$n$` example/label pairs `$(\x_i,y_i)$`. 
 In other words, the input distributed dataset
-([RDD](scala-programming-guide.html#resilient-distributed-datasets-rdds)) must be the set of
+([RDD](scala-programming-guide.md#resilient-distributed-datasets-rdds)) must be the set of
 vectors `$\x_i\in\R^d$`.
 
 ### Support Vector Machine
@@ -113,7 +113,7 @@ L(\wv;\x_i,y_i) :=  \log(1+\exp( -y_i \wv^T \x_i)) \ .
 For all currently implemented optimization methods for regression, the data matrix
 `$A\in\R^{n\times d}$` must be distributed between the worker machines *by rows* of `$A$`. In
 other words, the input distributed dataset
-([RDD](scala-programming-guide.html#resilient-distributed-datasets-rdds)) must be the set of the
+([RDD](scala-programming-guide.md#resilient-distributed-datasets-rdds)) must be the set of the
 `$n$` rows `$A_{i:}$` of `$A$`.
 
 Least Squares Regression refers to the setting where we try to fit a vector `$\y\in\R^n$` by
@@ -183,7 +183,7 @@ SGD) which is implemented in `MLlib` currently, and explained in the next sectio
 **Stochastic subGradient Descent (SGD).**
 For optimization objectives `$f$` written as a sum, *stochastic subgradient descent (SGD)* can be
 an efficient choice of optimization method, as we describe in the <a
-href="mllib-optimization.html">optimization section</a> in more detail. 
+href="mllib-optimization.md">optimization section</a> in more detail. 
 Because all methods considered here fit into the optimization formulation
 `$\eqref{eq:regPrimal}$`, this is especially natural, because the loss is written as an average
 of the individual losses coming from each datapoint.
@@ -246,7 +246,7 @@ Also, note that `$A_{i:} \in \R^d$` is a row-vector, but the gradient is a colum
 For both classification and regression, `MLlib` implements a simple distributed version of
 stochastic subgradient descent (SGD), building on the underlying gradient descent primitive (as
 described in the
-<a href="mllib-optimization.html">optimization section</a>).
+<a href="mllib-optimization.md">optimization section</a>).
 All provided algorithms take as input a regularization parameter (`regParam`) along with various
 parameters associated with stochastic gradient
 descent (`stepSize`, `numIterations`, `miniBatchFraction`).
@@ -254,20 +254,20 @@ For each of them, we support all 3 possible regularizations (none, L1 or L2).
 
 Available algorithms for binary classification:
 
-* [SVMWithSGD](api/mllib/index.html#org.apache.spark.mllib.classification.SVMWithSGD)
-* [LogisticRegressionWithSGD](api/mllib/index.html#org.apache.spark.mllib.classification.LogisticRegressionWithSGD)
+* [SVMWithSGD](api/mllib/index.md#org.apache.spark.mllib.classification.SVMWithSGD)
+* [LogisticRegressionWithSGD](api/mllib/index.md#org.apache.spark.mllib.classification.LogisticRegressionWithSGD)
 
 Available algorithms for linear regression: 
 
-* [LinearRegressionWithSGD](api/mllib/index.html#org.apache.spark.mllib.regression.LinearRegressionWithSGD)
-* [RidgeRegressionWithSGD](api/mllib/index.html#org.apache.spark.mllib.regression.RidgeRegressionWithSGD)
-* [LassoWithSGD](api/mllib/index.html#org.apache.spark.mllib.regression.LassoWithSGD)
+* [LinearRegressionWithSGD](api/mllib/index.md#org.apache.spark.mllib.regression.LinearRegressionWithSGD)
+* [RidgeRegressionWithSGD](api/mllib/index.md#org.apache.spark.mllib.regression.RidgeRegressionWithSGD)
+* [LassoWithSGD](api/mllib/index.md#org.apache.spark.mllib.regression.LassoWithSGD)
 
 Behind the scenes, all above methods use the SGD implementation from the
 gradient descent primitive in MLlib, see the 
-<a href="mllib-optimization.html">optimization</a> part:
+<a href="mllib-optimization.md">optimization</a> part:
 
-* [GradientDescent](api/mllib/index.html#org.apache.spark.mllib.optimization.GradientDescent)
+* [GradientDescent](api/mllib/index.md#org.apache.spark.mllib.optimization.GradientDescent)
 
 
 

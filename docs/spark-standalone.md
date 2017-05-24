@@ -10,7 +10,7 @@ In addition to running on the Mesos or YARN cluster managers, Spark also provide
 
 # Installing Spark Standalone to a Cluster
 
-To install Spark Standalone mode, you simply place a compiled version of Spark on each node on the cluster. You can obtain pre-built versions of Spark with each release or [build it yourself](index.html#building).
+To install Spark Standalone mode, you simply place a compiled version of Spark on each node on the cluster. You can obtain pre-built versions of Spark with each release or [build it yourself](index.md#building).
 
 # Starting a Cluster Manually
 
@@ -135,7 +135,7 @@ You can optionally configure the cluster further by setting environment variable
 # Connecting an Application to the Cluster
 
 To run an application on the Spark cluster, simply pass the `spark://IP:PORT` URL of the master as to the [`SparkContext`
-constructor](scala-programming-guide.html#initializing-spark).
+constructor](scala-programming-guide.md#initializing-spark).
 
 To run an interactive Spark shell against the cluster, run the following command:
 
@@ -150,7 +150,7 @@ You can also pass an option `-c <numCores>` to control the number of cores that 
 
 Spark supports two deploy modes. Spark applications may run with the driver inside the client process or entirely inside the cluster.
 
-The spark-submit script described in the [cluster mode overview](cluster-overview.html) provides the most straightforward way to submit a compiled Spark application to the cluster in either deploy mode. For info on the lower-level invocations used to launch an app inside the cluster, read ahead.
+The spark-submit script described in the [cluster mode overview](cluster-overview.md) provides the most straightforward way to submit a compiled Spark application to the cluster in either deploy mode. For info on the lower-level invocations used to launch an app inside the cluster, read ahead.
 
 ## Launching Applications Inside the Cluster
 
@@ -188,7 +188,7 @@ However, to allow multiple concurrent users, you can control the maximum number 
 application will use.
 By default, it will acquire *all* cores in the cluster, which only makes sense if you just run one
 application at a time. You can cap the number of cores by setting `spark.cores.max` in your
-[SparkConf](configuration.html#spark-properties). For example:
+[SparkConf](configuration.md#spark-properties). For example:
 
 {% highlight scala %}
 val conf = new SparkConf()

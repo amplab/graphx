@@ -6,7 +6,7 @@ title: Spark Configuration
 Spark provides three locations to configure the system:
 
 * [Spark properties](#spark-properties) control most application parameters and can be set by passing
-  a [SparkConf](api/core/index.html#org.apache.spark.SparkConf) object to SparkContext, or through Java
+  a [SparkConf](api/core/index.md#org.apache.spark.SparkConf) object to SparkContext, or through Java
   system properties.
 * [Environment variables](#environment-variables) can be used to set per-machine settings, such as
   the IP address, through the `conf/spark-env.sh` script on each node.
@@ -16,7 +16,7 @@ Spark provides three locations to configure the system:
 # Spark Properties
 
 Spark properties control most application settings and are configured separately for each application.
-The preferred way to set them is by passing a [SparkConf](api/core/index.html#org.apache.spark.SparkConf)
+The preferred way to set them is by passing a [SparkConf](api/core/index.md#org.apache.spark.SparkConf)
 class to your SparkContext constructor.
 Alternatively, Spark will also load them from Java system properties, for compatibility with old versions
 of Spark.
@@ -51,9 +51,9 @@ there are at least five properties that you will commonly want to control:
   <td>
     Class to use for serializing objects that will be sent over the network or need to be cached
     in serialized form. The default of Java serialization works with any Serializable Java object but is
-    quite slow, so we recommend <a href="tuning.html">using <code>org.apache.spark.serializer.KryoSerializer</code>
+    quite slow, so we recommend <a href="tuning.md">using <code>org.apache.spark.serializer.KryoSerializer</code>
     and configuring Kryo serialization</a> when speed is necessary. Can be any subclass of
-    <a href="api/core/index.html#org.apache.spark.serializer.Serializer"><code>org.apache.spark.Serializer</code></a>.
+    <a href="api/core/index.md#org.apache.spark.serializer.Serializer"><code>org.apache.spark.Serializer</code></a>.
   </td>
 </tr>
 <tr>
@@ -62,8 +62,8 @@ there are at least five properties that you will commonly want to control:
   <td>
     If you use Kryo serialization, set this class to register your custom classes with Kryo.
     It should be set to a class that extends
-    <a href="api/core/index.html#org.apache.spark.serializer.KryoRegistrator"><code>KryoRegistrator</code></a>.
-    See the <a href="tuning.html#data-serialization">tuning guide</a> for more details.
+    <a href="api/core/index.md#org.apache.spark.serializer.KryoRegistrator"><code>KryoRegistrator</code></a>.
+    See the <a href="tuning.md#data-serialization">tuning guide</a> for more details.
   </td>
 </tr>
 <tr>
@@ -79,8 +79,8 @@ there are at least five properties that you will commonly want to control:
   <td>spark.cores.max</td>
   <td>(not set)</td>
   <td>
-    When running on a <a href="spark-standalone.html">standalone deploy cluster</a> or a
-    <a href="running-on-mesos.html#mesos-run-modes">Mesos cluster in "coarse-grained"
+    When running on a <a href="spark-standalone.md">standalone deploy cluster</a> or a
+    <a href="running-on-mesos.md#mesos-run-modes">Mesos cluster in "coarse-grained"
     sharing mode</a>, the maximum amount of CPU cores to request for the application from
     across the cluster (not from each machine). If not set, the default will be
     <code>spark.deploy.defaultCores</code> on Spark's standalone cluster manager, or
@@ -142,7 +142,7 @@ Apart from these, the following properties are also available, and may be useful
   <td>false</td>
   <td>
     If set to "true", runs over Mesos clusters in
-    <a href="running-on-mesos.html#mesos-run-modes">"coarse-grained" sharing mode</a>,
+    <a href="running-on-mesos.md#mesos-run-modes">"coarse-grained" sharing mode</a>,
     where Spark acquires one long-lived Mesos task on each machine instead of one Mesos task per Spark task.
     This gives lower-latency scheduling for short queries, but leaves resources in use for the whole
     duration of the Spark job.
@@ -238,7 +238,7 @@ Apart from these, the following properties are also available, and may be useful
   <td>spark.scheduler.mode</td>
   <td>FIFO</td>
   <td>
-    The <a href="job-scheduling.html#scheduling-within-an-application">scheduling mode</a> between
+    The <a href="job-scheduling.md#scheduling-within-an-application">scheduling mode</a> between
     jobs submitted to the same SparkContext. Can be set to <code>FAIR</code>
     to use fair sharing instead of queueing jobs one after another. Useful for
     multi-user services.
@@ -666,7 +666,7 @@ The following variables can be set in `spark-env.sh`:
 * `SPARK_JAVA_OPTS`, to add JVM options. This includes Java options like garbage collector settings and any system
    properties that you'd like to pass with `-D`. One use case is to set some Spark properties differently on this
    machine, e.g., `-Dspark.local.dir=/disk1,/disk2`.
-* Options for the Spark [standalone cluster scripts](spark-standalone.html#cluster-launch-scripts), such as number of cores
+* Options for the Spark [standalone cluster scripts](spark-standalone.md#cluster-launch-scripts), such as number of cores
   to use on each machine and maximum memory.
 
 Since `spark-env.sh` is a shell script, some of these can be set programmatically -- for example, you might

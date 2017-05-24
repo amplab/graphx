@@ -41,13 +41,13 @@ There are several useful things to note about this architecture:
 
 The system currently supports three cluster managers:
 
-* [Standalone](spark-standalone.html) -- a simple cluster manager included with Spark that makes it
+* [Standalone](spark-standalone.md) -- a simple cluster manager included with Spark that makes it
   easy to set up a cluster.
-* [Apache Mesos](running-on-mesos.html) -- a general cluster manager that can also run Hadoop MapReduce
+* [Apache Mesos](running-on-mesos.md) -- a general cluster manager that can also run Hadoop MapReduce
   and service applications.
-* [Hadoop YARN](running-on-yarn.html) -- the resource manager in Hadoop 2.
+* [Hadoop YARN](running-on-yarn.md) -- the resource manager in Hadoop 2.
 
-In addition, Spark's [EC2 launch scripts](ec2-scripts.html) make it easy to launch a standalone
+In addition, Spark's [EC2 launch scripts](ec2-scripts.md) make it easy to launch a standalone
 cluster on Amazon EC2.
 
 # Launching Applications
@@ -117,13 +117,13 @@ Over time this can use up a significant amount of space and will need to be clea
 
 Each driver program has a web UI, typically on port 4040, that displays information about running
 tasks, executors, and storage usage. Simply go to `http://<driver-node>:4040` in a web browser to
-access this UI. The [monitoring guide](monitoring.html) also describes other monitoring options.
+access this UI. The [monitoring guide](monitoring.md) also describes other monitoring options.
 
 # Job Scheduling
 
 Spark gives control over resource allocation both _across_ applications (at the level of the cluster
 manager) and _within_ applications (if multiple computations are happening on the same SparkContext).
-The [job scheduling overview](job-scheduling.html) describes this in more detail.
+The [job scheduling overview](job-scheduling.md) describes this in more detail.
 
 # Glossary
 

@@ -6,7 +6,7 @@ title: Python Programming Guide
 
 The Spark Python API (PySpark) exposes the Spark programming model to Python.
 To learn the basics of Spark, we recommend reading through the
-[Scala programming guide](scala-programming-guide.html) first; it should be
+[Scala programming guide](scala-programming-guide.md) first; it should be
 easy to follow even if you don't know Scala.
 This guide will show how to use the Spark features described there in Python.
 
@@ -85,7 +85,7 @@ The Python shell can be used explore data interactively and is a simple way to l
 By default, the `bin/pyspark` shell creates SparkContext that runs applications locally on all of
 your machine's logical cores.
 To connect to a non-local cluster, or to specify a number of cores, set the `MASTER` environment variable.
-For example, to use the `bin/pyspark` shell with a [standalone Spark cluster](spark-standalone.html):
+For example, to use the `bin/pyspark` shell with a [standalone Spark cluster](spark-standalone.md):
 
 {% highlight bash %}
 $ MASTER=spark://IP:PORT ./bin/pyspark
@@ -121,7 +121,7 @@ IPython also works on a cluster or on multiple cores if you set the `MASTER` env
 # Standalone Programs
 
 PySpark can also be used from standalone Python scripts by creating a SparkContext in your script and running the script using `bin/pyspark`.
-The Quick Start guide includes a [complete example](quick-start.html#a-standalone-app-in-python) of a standalone Python application.
+The Quick Start guide includes a [complete example](quick-start.md#a-standalone-app-in-python) of a standalone Python application.
 
 Code dependencies can be deployed by listing them in the `pyFiles` option in the SparkContext constructor:
 
@@ -133,8 +133,8 @@ sc = SparkContext("local", "App Name", pyFiles=['MyFile.py', 'lib.zip', 'app.egg
 Files listed here will be added to the `PYTHONPATH` and shipped to remote worker machines.
 Code dependencies can be added to an existing SparkContext using its `addPyFile()` method.
 
-You can set [configuration properties](configuration.html#spark-properties) by passing a
-[SparkConf](api/pyspark/pyspark.conf.SparkConf-class.html) object to SparkContext:
+You can set [configuration properties](configuration.md#spark-properties) by passing a
+[SparkConf](api/pyspark/pyspark.conf.SparkConf-class.md) object to SparkContext:
 
 {% highlight python %}
 from pyspark import SparkConf, SparkContext
@@ -147,13 +147,13 @@ sc = SparkContext(conf = conf)
 
 # API Docs
 
-[API documentation](api/pyspark/index.html) for PySpark is available as Epydoc.
+[API documentation](api/pyspark/index.md) for PySpark is available as Epydoc.
 Many of the methods also contain [doctests](http://docs.python.org/2/library/doctest.html) that provide additional usage examples.
 
 # Libraries
 
-[MLlib](mllib-guide.html) is also available in PySpark. To use it, you'll need
-[NumPy](http://www.numpy.org) version 1.7 or newer. The [MLlib guide](mllib-guide.html) contains
+[MLlib](mllib-guide.md) is also available in PySpark. To use it, you'll need
+[NumPy](http://www.numpy.org) version 1.7 or newer. The [MLlib guide](mllib-guide.md) contains
 some example applications.
 
 # Where to Go from Here
