@@ -9,7 +9,7 @@ title: Job Scheduling
 # Overview
 
 Spark has several facilities for scheduling resources between computations. First, recall that, as described
-in the [cluster mode overview](cluster-overview.html), each Spark application (instance of SparkContext)
+in the [cluster mode overview](cluster-overview.md), each Spark application (instance of SparkContext)
 runs an independent set of executor processes. The cluster managers that Spark runs on provide
 facilities for [scheduling across applications](#scheduling-across-applications). Second,
 _within_ each Spark application, multiple "jobs" (Spark actions) may be running concurrently
@@ -25,9 +25,9 @@ different options to manage allocation, depending on the cluster manager.
 
 The simplest option, available on all cluster managers, is _static partitioning_ of resources. With
 this approach, each application is given a maximum amount of resources it can use, and holds onto them
-for its whole duration. This is the approach used in Spark's [standalone](spark-standalone.html)
-and [YARN](running-on-yarn.html) modes, as well as the
-[coarse-grained Mesos mode](running-on-mesos.html#mesos-run-modes).
+for its whole duration. This is the approach used in Spark's [standalone](spark-standalone.md)
+and [YARN](running-on-yarn.md) modes, as well as the
+[coarse-grained Mesos mode](running-on-mesos.md#mesos-run-modes).
 Resource allocation can be configured as follows, based on the cluster type:
 
 * **Standalone mode:** By default, applications submitted to the standalone mode cluster will run in
@@ -140,7 +140,7 @@ properties:
 
 The pool properties can be set by creating an XML file, similar to `conf/fairscheduler.xml.template`,
 and setting a `spark.scheduler.allocation.file` property in your
-[SparkConf](configuration.html#spark-properties).
+[SparkConf](configuration.md#spark-properties).
 
 {% highlight scala %}
 conf.set("spark.scheduler.allocation.file", "/path/to/file")

@@ -20,7 +20,7 @@ If multiple SparkContexts are running on the same host, they will bind to succes
 beginning with 4040 (4041, 4042, etc).
 
 Spark's Standalone Mode cluster manager also has its own
-[web UI](spark-standalone.html#monitoring-and-logging). 
+[web UI](spark-standalone.md#monitoring-and-logging). 
 
 Note that in both of these UIs, the tables are sortable by clicking their headers,
 making it easy to identify slow tasks, data skew, etc.
@@ -32,7 +32,7 @@ Spark has a configurable metrics system based on the
 This allows users to report Spark metrics to a variety of sinks including HTTP, JMX, and CSV 
 files. The metrics system is configured via a configuration file that Spark expects to be present 
 at `$SPARK_HOME/conf/metrics.properties`. A custom file location can be specified via the 
-`spark.metrics.conf` [configuration property](configuration.html#spark-properties).
+`spark.metrics.conf` [configuration property](configuration.md#spark-properties).
 Spark's metrics are decoupled into different 
 _instances_ corresponding to Spark components. Within each instance, you can configure a 
 set of sinks to which metrics are reported. The following instances are currently supported:

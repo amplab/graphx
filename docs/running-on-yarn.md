@@ -52,7 +52,7 @@ There are two deploy modes that can be used to launch Spark applications on YARN
 
 Unlike in Spark standalone and Mesos mode, in which the master's address is specified in the "master" parameter, in YARN mode the ResourceManager's address is picked up from the Hadoop configuration.  Thus, the master parameter is simply "yarn-client" or "yarn-cluster".
 
-The spark-submit script described in the [cluster mode overview](cluster-overview.html) provides the most straightforward way to submit a compiled Spark application to YARN in either deploy mode. For info on the lower-level invocations it uses, read ahead. For running spark-shell against YARN, skip down to the yarn-client section. 
+The spark-submit script described in the [cluster mode overview](cluster-overview.md) provides the most straightforward way to submit a compiled Spark application to YARN in either deploy mode. For info on the lower-level invocations it uses, read ahead. For running spark-shell against YARN, skip down to the yarn-client section. 
 
 ## Launching a Spark application with yarn-cluster mode.
 
@@ -136,7 +136,7 @@ When log aggregation isn't turned on, logs are retained locally on each machine 
 
 # Building Spark for Hadoop/YARN 2.2.x
 
-See [Building Spark with Maven](building-with-maven.html) for instructions on how to build Spark using Maven.
+See [Building Spark with Maven](building-with-maven.md) for instructions on how to build Spark using Maven.
 
 # Important notes
 

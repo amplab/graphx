@@ -10,7 +10,7 @@ Because of the in-memory nature of most Spark computations, Spark programs can b
 by any resource in the cluster: CPU, network bandwidth, or memory.
 Most often, if the data fits in memory, the bottleneck is network bandwidth, but sometimes, you
 also need to do some tuning, such as
-[storing RDDs in serialized form](scala-programming-guide.html#rdd-persistence), to
+[storing RDDs in serialized form](scala-programming-guide.md#rdd-persistence), to
 decrease memory usage.
 This guide will cover two main topics: data serialization, which is crucial for good network
 performance and can also reduce memory use, and memory tuning. We also sketch several smaller topics.
@@ -38,7 +38,7 @@ in your operations) and performance. It provides two serialization libraries:
   `Serializable` types and requires you to *register* the classes you'll use in the program in advance
   for best performance.
 
-You can switch to using Kryo by initializing your job with a [SparkConf](configuration.html#spark-properties)
+You can switch to using Kryo by initializing your job with a [SparkConf](configuration.md#spark-properties)
 and calling `conf.set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")`.
 This setting configures the serializer used for not only shuffling data between worker
 nodes but also when serializing RDDs to disk.  The only reason Kryo is not the default is because of the custom
@@ -48,7 +48,7 @@ Spark automatically includes Kryo serializers for the many commonly-used core Sc
 in the AllScalaRegistrar from the [Twitter chill](https://github.com/twitter/chill) library.
 
 To register your own custom classes with Kryo, create a public class that extends
-[`org.apache.spark.serializer.KryoRegistrator`](api/core/index.html#org.apache.spark.serializer.KryoRegistrator) and set the
+[`org.apache.spark.serializer.KryoRegistrator`](api/core/index.md#org.apache.spark.serializer.KryoRegistrator) and set the
 `spark.kryo.registrator` config property to point to it, as follows:
 
 {% highlight scala %}
@@ -123,13 +123,13 @@ pointer-based data structures and wrapper objects. There are several ways to do 
 3. Consider using numeric IDs or enumeration objects instead of strings for keys.
 4. If you have less than 32 GB of RAM, set the JVM flag `-XX:+UseCompressedOops` to make pointers be
    four bytes instead of eight. You can add these options in
-   [`spark-env.sh`](configuration.html#environment-variables-in-spark-envsh).
+   [`spark-env.sh`](configuration.md#environment-variables-in-spark-envsh).
 
 ## Serialized RDD Storage
 
 When your objects are still too large to efficiently store despite this tuning, a much simpler way
 to reduce memory usage is to store them in *serialized* form, using the serialized StorageLevels in
-the [RDD persistence API](scala-programming-guide.html#rdd-persistence), such as `MEMORY_ONLY_SER`.
+the [RDD persistence API](scala-programming-guide.md#rdd-persistence), such as `MEMORY_ONLY_SER`.
 Spark will then store each RDD partition as one large byte array.
 The only downside of storing data in serialized form is slower access times, due to having to
 deserialize each object on the fly.
@@ -221,7 +221,7 @@ enough. Spark automatically sets the number of "map" tasks to run on each file a
 (though you can control it through optional parameters to `SparkContext.textFile`, etc), and for
 distributed "reduce" operations, such as `groupByKey` and `reduceByKey`, it uses the largest
 parent RDD's number of partitions. You can pass the level of parallelism as a second argument
-(see the [`spark.PairRDDFunctions`](api/core/index.html#org.apache.spark.rdd.PairRDDFunctions) documentation),
+(see the [`spark.PairRDDFunctions`](api/core/index.md#org.apache.spark.rdd.PairRDDFunctions) documentation),
 or set the config property `spark.default.parallelism` to change the default.
 In general, we recommend 2-3 tasks per CPU core in your cluster.
 
@@ -238,7 +238,7 @@ number of cores in your clusters.
 
 ## Broadcasting Large Variables
 
-Using the [broadcast functionality](scala-programming-guide.html#broadcast-variables)
+Using the [broadcast functionality](scala-programming-guide.md#broadcast-variables)
 available in `SparkContext` can greatly reduce the size of each serialized task, and the cost
 of launching a job over a cluster. If your tasks use any large object from the driver program
 inside of them (e.g. a static lookup table), consider turning it into a broadcast variable.

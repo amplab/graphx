@@ -13,6 +13,6 @@ For other types of Spark deployments, the spark config `spark.authenticate.secre
 
 IMPORTANT NOTE: The NettyBlockFetcherIterator is not secured so do not use netty for the shuffle is running with authentication on.
 
-See [Spark Configuration](configuration.html) for more details on the security configs.
+See [Spark Configuration](configuration.md) for more details on the security configs.
 
-See <a href="api/core/index.html#org.apache.spark.SecurityManager"><code>org.apache.spark.SecurityManager</code></a> for implementation details about security.
+See <a href="api/core/index.md#org.apache.spark.SecurityManager"><code>org.apache.spark.SecurityManager</code></a> for implementation details about security.

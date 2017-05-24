@@ -10,7 +10,7 @@ with these distributions:
 # Compile-time Hadoop Version
 
 When compiling Spark, you'll need to 
-[set the SPARK_HADOOP_VERSION flag](index.html#a-note-about-hadoop-versions):
+[set the SPARK_HADOOP_VERSION flag](index.md#a-note-about-hadoop-versions):
 
     SPARK_HADOOP_VERSION=1.0.4 sbt/sbt assembly
 
@@ -87,7 +87,7 @@ Or in Maven:
 
 # Where to Run Spark
 
-As described in the [Hardware Provisioning](hardware-provisioning.html#storage-systems) guide,
+As described in the [Hardware Provisioning](hardware-provisioning.md#storage-systems) guide,
 Spark can run in a variety of deployment modes:
 
 * Using dedicated set of Spark nodes in your cluster. These nodes should be co-located with your

@@ -13,7 +13,7 @@ filtering, as well as an underlying gradient descent optimization primitive.
 # Available Methods
 The following links provide a detailed explanation of the methods and usage examples for each of them: 
 
-* <a href="mllib-classification-regression.html">Classification and Regression</a>
+* <a href="mllib-classification-regression.md">Classification and Regression</a>
   * Binary Classification
     * SVM (L1 and L2 regularized)
     * Logistic Regression (L1 and L2 regularized)
@@ -21,13 +21,13 @@ The following links provide a detailed explanation of the methods and usage exam
     * Least Squares
     * Lasso
     * Ridge Regression
-* <a href="mllib-clustering.html">Clustering</a>
+* <a href="mllib-clustering.md">Clustering</a>
   * k-Means
-* <a href="mllib-collaborative-filtering.html">Collaborative Filtering</a>
+* <a href="mllib-collaborative-filtering.md">Collaborative Filtering</a>
   * Matrix Factorization using Alternating Least Squares
-* <a href="mllib-optimization.html">Optimization</a>
+* <a href="mllib-optimization.md">Optimization</a>
   * Gradient Descent and Stochastic Gradient Descent
-* <a href="mllib-linear-algebra.html">Linear Algebra</a>
+* <a href="mllib-linear-algebra.md">Linear Algebra</a>
   * Singular Value Decomposition
   * Principal Component Analysis
 

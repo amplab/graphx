@@ -5,7 +5,7 @@ title: Running Spark on Mesos
 
 Spark can run on clusters managed by [Apache Mesos](http://mesos.apache.org/). Follow the steps below to install Mesos and Spark:
 
-1. Download and build Spark using the instructions [here](index.html). **Note:** Don't forget to consider what version of HDFS you might want to use!
+1. Download and build Spark using the instructions [here](index.md). **Note:** Don't forget to consider what version of HDFS you might want to use!
 2. Download, build, install, and start Mesos {{site.MESOS_VERSION}} on your cluster. You can download the Mesos distribution from a [mirror](http://www.apache.org/dyn/closer.cgi/mesos/{{site.MESOS_VERSION}}/). See the Mesos [Getting Started](http://mesos.apache.org/gettingstarted) page for more information. **Note:** If you want to run Mesos without installing it into the default paths on your system (e.g., if you don't have administrative privileges to install it), you should also pass the `--prefix` option to `configure` to tell it where to install. For example, pass `--prefix=/home/user/mesos`. By default the prefix is `/usr/local`.
 3. Create a Spark "distribution" using `make-distribution.sh`.
 4. Rename the `dist` directory created from `make-distribution.sh` to `spark-{{site.SPARK_VERSION}}`.
@@ -35,7 +35,7 @@ launch only *one* long-running Spark task on each Mesos machine, and dynamically
 it. The benefit is much lower startup overhead, but at the cost of reserving the Mesos resources for the complete duration
 of the application.
 
-To run in coarse-grained mode, set the `spark.mesos.coarse` property in your [SparkConf](configuration.html#spark-properties):
+To run in coarse-grained mode, set the `spark.mesos.coarse` property in your [SparkConf](configuration.md#spark-properties):
 
 {% highlight scala %}
 conf.set("spark.mesos.coarse", "true")
