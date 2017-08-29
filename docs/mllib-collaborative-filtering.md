@@ -18,7 +18,7 @@ In particular, we implement the [alternating least squares
 algorithm to learn these latent factors. The implementation in MLlib has the
 following parameters:
 
-* *numBlocks* is the number of blacks used to parallelize computation (set to -1 to auto-configure). 
+* *numBlocks* is the number of blocks used to parallelize computation (set to -1 to auto-configure). 
 * *rank* is the number of latent factors in our model.
 * *iterations* is the number of iterations to run.
 * *lambda* specifies the regularization parameter in ALS.
@@ -45,7 +45,7 @@ Available algorithms for collaborative filtering:
 * [ALS](api/mllib/index.html#org.apache.spark.mllib.recommendation.ALS)
 
 
-# Usage in Scala
+## Usage in Scala
 
 Following code snippets can be executed in `spark-shell`.
 
@@ -53,7 +53,7 @@ In the following example we load rating data. Each row consists of a user, a pro
 We use the default ALS.train() method which assumes ratings are explicit. We evaluate the recommendation
 model by measuring the Mean Squared Error of rating prediction.
 
-{% highlight scala %}
+```scala
 import org.apache.spark.mllib.recommendation.ALS
 import org.apache.spark.mllib.recommendation.Rating
 
@@ -79,7 +79,7 @@ val MSE = ratesAndPreds.map{
     case ((user, product), (r1, r2)) =>  math.pow((r1- r2), 2)
 }.reduce(_ + _)/ratesAndPreds.count
 println("Mean Squared Error = " + MSE)
-{% endhighlight %}
+```
 
 If the rating matrix is derived from other source of information (i.e., it is inferred from
 other signals), you can use the trainImplicit method to get better results.
@@ -88,21 +88,21 @@ other signals), you can use the trainImplicit method to get better results.
 val model = ALS.trainImplicit(ratings, 1, 20, 0.01)
 {% endhighlight %}
 
-# Usage in Java
+## Usage in Java
 
 All of MLlib's methods use Java-friendly types, so you can import and call them there the same
 way you do in Scala. The only caveat is that the methods take Scala RDD objects, while the
 Spark Java API uses a separate `JavaRDD` class. You can convert a Java RDD to a Scala one by
 calling `.rdd()` on your `JavaRDD` object.
 
-# Usage in Python
+## Usage in Python
 Following examples can be tested in the PySpark shell.
 
 In the following example we load rating data. Each row consists of a user, a product and a rating.
 We use the default ALS.train() method which assumes ratings are explicit. We evaluate the
 recommendation by measuring the Mean Squared Error of rating prediction.
 
-{% highlight python %}
+```python
 from pyspark.mllib.recommendation import ALS
 from numpy import array
 
@@ -119,12 +119,12 @@ predictions = model.predictAll(testdata).map(lambda r: ((r[0], r[1]), r[2]))
 ratesAndPreds = ratings.map(lambda r: ((r[0], r[1]), r[2])).join(predictions)
 MSE = ratesAndPreds.map(lambda r: (r[1][0] - r[1][1])**2).reduce(lambda x, y: x + y)/ratesAndPreds.count()
 print("Mean Squared Error = " + str(MSE))
-{% endhighlight %}
+```
 
 If the rating matrix is derived from other source of information (i.e., it is inferred from other
 signals), you can use the trainImplicit method to get better results.
 
-{% highlight python %}
+```python
 # Build the recommendation model using Alternating Least Squares based on implicit ratings
 model = ALS.trainImplicit(ratings, 1, 20)
-{% endhighlight %}
+```
