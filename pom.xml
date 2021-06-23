@@ -124,7 +124,7 @@
     <hive.version>0.12.0</hive.version>
     <parquet.version>1.3.2</parquet.version>
     <jblas.version>1.2.3</jblas.version>
-    <jetty.version>8.1.14.v20131031</jetty.version>
+    <jetty.version>9.4.41.v20210516</jetty.version>
     <chill.version>0.3.1</chill.version>
     <codahale.metrics.version>3.0.0</codahale.metrics.version>
 
